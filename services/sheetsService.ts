@@ -62,6 +62,21 @@ export async function addExpense(
   return novoSaldo;
 }
 
+export async function subtractExpense(
+  valor: number,
+  cellGasto: string,
+  cellSaldo: string
+): Promise<number> {
+  const data = await safeFetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "subtractExpense", valor, cellGasto, cellSaldo }),
+  });
+  const novoSaldo = parseFloat(String(data.novoSaldo).replace(",", "."));
+  if (isNaN(novoSaldo)) throw new Error(`Saldo inválido recebido: "${data.novoSaldo}"`);
+  return novoSaldo;
+}
+
 // ── Histórico local ────────────────────────────────────────────────────────
 
 export interface Despesa {
@@ -85,4 +100,11 @@ export async function addDespesa(despesa: Omit<Despesa, "id">): Promise<Despesa>
 export async function getDespesas(): Promise<Despesa[]> {
   const raw = await AsyncStorage.getItem(HIST_KEY);
   return raw ? JSON.parse(raw) : [];
+}
+
+export async function removeDespesa(id: string): Promise<void> {
+  const raw = await AsyncStorage.getItem(HIST_KEY);
+  const lista: Despesa[] = raw ? JSON.parse(raw) : [];
+  const nova = lista.filter((d) => d.id !== id);
+  await AsyncStorage.setItem(HIST_KEY, JSON.stringify(nova));
 }

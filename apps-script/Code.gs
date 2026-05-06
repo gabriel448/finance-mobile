@@ -60,6 +60,22 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (body.action === "subtractExpense") {
+      var sheet      = getSheet();
+      var valor      = parseFloat(body.valor);
+      var gastoAtual = parseFloat(sheet.getRange(cellGasto).getValue()) || 0;
+      var novoGasto  = Math.max(0, gastoAtual - valor); // nunca negativo
+
+      sheet.getRange(cellGasto).setValue(novoGasto);
+      SpreadsheetApp.flush();
+      Utilities.sleep(1500);
+
+      var novoSaldo = sheet.getRange(cellSaldo).getValue();
+      return ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: novoSaldo }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     return ContentService
       .createTextOutput(JSON.stringify({ error: "Ação desconhecida" }))
       .setMimeType(ContentService.MimeType.JSON);

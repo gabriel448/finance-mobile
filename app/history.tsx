@@ -9,7 +9,8 @@ import {
   RefreshControl,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { getDespesas, Despesa } from "../services/sheetsService";
+import { getDespesas, removeDespesa, Despesa } from "../services/sheetsService";
+import { subtractExpense, getCellConfig } from "../services/sheetsService";
 import ExpenseDetailModal from "../components/ExpenseDetailModal";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -51,6 +52,16 @@ export default function HistoryScreen() {
   function handlePress(item: Despesa) {
     setSelectedDespesa(item);
     setDetailVisible(true);
+  }
+
+  // ── Reembolso: subtrai da planilha + apaga do histórico local ─────────────
+  async function handleRefund(despesa: Despesa) {
+    const config = await getCellConfig();
+    if (!config) throw new Error("Células não configuradas. Vá em Configurações.");
+    await subtractExpense(despesa.valor, config.cellGasto, config.cellSaldo);
+    await removeDespesa(despesa.id);
+    // Atualiza lista localmente sem reload completo
+    setHistorico((prev) => prev.filter((d) => d.id !== despesa.id));
   }
 
   function renderItem({ item, index }: { item: Despesa; index: number }) {
@@ -124,6 +135,7 @@ export default function HistoryScreen() {
         visible={detailVisible}
         despesa={selectedDespesa}
         onClose={() => setDetailVisible(false)}
+        onRefund={handleRefund}
       />
     </View>
   );

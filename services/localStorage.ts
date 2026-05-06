@@ -96,6 +96,13 @@ export async function getDespesas(): Promise<Despesa[]> {
   return raw ? JSON.parse(raw) : [];
 }
 
+export async function removeDespesa(id: string): Promise<void> {
+  const raw = await AsyncStorage.getItem(HIST_KEY);
+  const lista: Despesa[] = raw ? JSON.parse(raw) : [];
+  const nova = lista.filter((d) => d.id !== id);
+  await AsyncStorage.setItem(HIST_KEY, JSON.stringify(nova));
+}
+
 export async function clearDespesas() {
   await AsyncStorage.removeItem(HIST_KEY);
 }
