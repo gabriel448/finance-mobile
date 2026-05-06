@@ -4,7 +4,7 @@
     "slug": "finance-mobile-1",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/icon_app.png",
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "scheme": "financemobile",
@@ -19,12 +19,16 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon_app.png",
         "backgroundColor": "#0d1117"
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.financemobile.app"
+      "package": "com.financemobile.app",
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png",
@@ -35,6 +39,13 @@
       "expo-font",
       "expo-audio",
       "expo-web-browser"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4095a94b-0883-40b3-a4c6-239c8cb3a178"
+      }
+    },
+    "owner": "sousa1324"
   }
 }

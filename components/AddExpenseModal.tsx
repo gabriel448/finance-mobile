@@ -45,7 +45,13 @@ export default function AddExpenseModal({ visible, onClose, onSuccess }: Props) 
     setSuccess(true);
 
     // Som + animação de check ao mesmo tempo
-    try { player.seekTo(0); player.play(); } catch {}
+    try {
+      player.volume = 1.0;
+      player.seekTo(0);
+      player.play();
+    } catch {
+      // Som opcional — ignora erros
+    }
 
     Animated.parallel([
       Animated.spring(scaleAnim, {

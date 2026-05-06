@@ -114,7 +114,7 @@ export default function RootLayout() {
           <SafeAreaView style={{ flex: 1 }}>
             <View style={styles.drawerHeader}>
               <Ionicons name="stats-chart" size={28} color="#58a6ff" />
-              <Text style={styles.drawerTitle}>Finanças</Text>
+              <Text style={styles.drawerTitle}>SousaDEV</Text>
             </View>
 
             {navItems.map((item) => {
