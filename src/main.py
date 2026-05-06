@@ -124,7 +124,7 @@ async def main(page: ft.Page):
             on_click=lambda e, i=item: abrir_detalhes(i)
         )
 
-    coluna_historico = ft.Column(scroll=ft.ScrollMode.AUTO, expand=True)
+    coluna_historico = ft.Column(scroll=ft.ScrollMode.AUTO)
 
     drawer = ft.NavigationDrawer(
         controls=[
@@ -139,9 +139,11 @@ async def main(page: ft.Page):
     async def abrir_drawer(e):
         # Recarrega a lista toda vez que o menu abre
         itens = storage.obter_historico()
+        print(f"DEBUG: Found {len(itens)} items for history drawer. Path: {storage.caminho}")
         coluna_historico.controls.clear()
         for i in itens:
             coluna_historico.controls.append(criar_linha_historico(i))
+        drawer.update()
         await page.show_drawer()
         page.update()
 
