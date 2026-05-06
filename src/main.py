@@ -198,7 +198,7 @@ async def main(page: ft.Page):
         botoes_acao
     )
     page.update()
-    page.overlay.append(ui.dialogo)
+    page.overlay.extend([ui.dialogo, ui.dialogo_detalhes])
     page.update()
     # Executa a função assíncrona em segundo plano sem travar a UI
     page.run_task(atualizar_saldo)

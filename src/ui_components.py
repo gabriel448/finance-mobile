@@ -14,7 +14,7 @@ class MainUI:
         self.input_nome = ft.TextField(label="Nome do Custo")
         self.input_valor = ft.TextField(label="Valor", keyboard_type=ft.KeyboardType.NUMBER)
         
-        self.btn_confirmar = ft.ElevatedButton("Adicionar", on_click=on_add_click)
+        self.btn_confirmar = ft.Button("Adicionar", on_click=on_add_click)
 
         # --- NOVO: Círculo de loading escondido ---
         self.loading_ring = ft.ProgressRing(width=24, height=24, stroke_width=3, visible=False)
@@ -48,7 +48,7 @@ class MainUI:
         self.detalhes_valor = ft.Text(size=24, color=ft.Colors.RED_400, weight=ft.FontWeight.BOLD)
         
         # O botão de fechar não tem on_click aqui, injetaremos no main.py ou passamos por parâmetro
-        self.btn_fechar_detalhes = ft.ElevatedButton("Voltar")
+        self.btn_fechar_detalhes = ft.Button("Voltar")
         
         self.dialogo_detalhes = ft.AlertDialog(
             title=ft.Text("Detalhes do Gasto"),
