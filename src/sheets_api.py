@@ -1,8 +1,10 @@
+import os
 import gspread
 import asyncio
 
 # Configurações fixas
-CREDENTIALS_FILE = "src/assets/fincance-tracker-mobile-1f24d2daaf4a.json"
+base_dir = os.path.dirname(os.path.abspath(__file__))
+CREDENTIALS_FILE = os.path.join(base_dir, "assets", "fincance-tracker-mobile-1f24d2daaf4a.json")
 SHEET_NAME = "Controle-financeiro"
 
 class SheetsService:
