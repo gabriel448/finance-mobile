@@ -6,7 +6,7 @@
     "orientation": "portrait",
     "icon": "./assets/icon_app.png",
     "userInterfaceStyle": "dark",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "scheme": "financemobile",
     "splash": {
       "image": "./assets/splash-icon.png",

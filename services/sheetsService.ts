@@ -1,7 +1,66 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbzaC0okJtVO3idhGHdPEE0hP4-zIjqtLq6uAH5aMyLpTY_oUx1EOwP6BgUbOB_tsv9r/exec";
+// ── Chaves do AsyncStorage ─────────────────────────────────────────────────
+const SCRIPT_URL_KEY    = "apps_script_url";
+const SPREADSHEET_ID_KEY = "spreadsheet_id";
+const CONFIG_KEY        = "cell_config";
+const HIST_KEY          = "historico_despesas";
+
+// ── URL do Web App (script autônomo) ──────────────────────────────────────
+
+export async function saveScriptUrl(url: string): Promise<void> {
+  await AsyncStorage.setItem(SCRIPT_URL_KEY, url.trim());
+}
+
+export async function getScriptUrl(): Promise<string | null> {
+  return AsyncStorage.getItem(SCRIPT_URL_KEY);
+}
+
+export async function clearScriptUrl(): Promise<void> {
+  await AsyncStorage.removeItem(SCRIPT_URL_KEY);
+  await AsyncStorage.removeItem(SPREADSHEET_ID_KEY);
+}
+
+// ── ID da planilha do usuário ──────────────────────────────────────────────
+
+export async function saveSpreadsheetId(id: string): Promise<void> {
+  await AsyncStorage.setItem(SPREADSHEET_ID_KEY, id);
+}
+
+export async function getSpreadsheetId(): Promise<string | null> {
+  return AsyncStorage.getItem(SPREADSHEET_ID_KEY);
+}
+
+/**
+ * Extrai o spreadsheetId de uma URL do Google Sheets.
+ * Aceita os formatos:
+ *   https://docs.google.com/spreadsheets/d/ID/edit
+ *   https://docs.google.com/spreadsheets/d/ID/
+ */
+export function extractSpreadsheetId(sheetsUrl: string): string | null {
+  const match = sheetsUrl.match(/\/spreadsheets\/d\/([a-zA-Z0-9-_]+)/);
+  return match ? match[1] : null;
+}
+
+/**
+ * Testa a conexão com o Apps Script + a planilha.
+ * Retorna o nome da planilha em caso de sucesso.
+ */
+export async function pingScript(scriptUrl: string, spreadsheetId: string): Promise<string> {
+  const url = `${scriptUrl.trim()}?action=ping&spreadsheetId=${encodeURIComponent(spreadsheetId)}`;
+  const res = await fetch(url, { redirect: "follow" });
+  const contentType = res.headers.get("content-type") ?? "";
+  if (!contentType.includes("application/json")) {
+    throw new Error(
+      "A URL do Web App não respondeu com JSON.\n" +
+      "Verifique se o script foi publicado corretamente."
+    );
+  }
+  const data = await res.json();
+  if (data.error) throw new Error(data.error);
+  if (!data.ok)   throw new Error("O script não respondeu ao ping.");
+  return data.title as string;
+}
 
 // ── Configuração das células ───────────────────────────────────────────────
 
@@ -10,9 +69,7 @@ export interface CellConfig {
   cellGasto: string; // ex: "I8"
 }
 
-const CONFIG_KEY = "cell_config";
-
-export async function saveCellConfig(config: CellConfig) {
+export async function saveCellConfig(config: CellConfig): Promise<void> {
   await AsyncStorage.setItem(CONFIG_KEY, JSON.stringify(config));
 }
 
@@ -21,7 +78,16 @@ export async function getCellConfig(): Promise<CellConfig | null> {
   return raw ? JSON.parse(raw) : null;
 }
 
-// ── Chamadas ao Apps Script ────────────────────────────────────────────────
+// ── Helper interno ─────────────────────────────────────────────────────────
+
+async function getCredentials(): Promise<{ url: string; spreadsheetId: string }> {
+  const url           = await getScriptUrl();
+  const spreadsheetId = await getSpreadsheetId();
+  if (!url || !spreadsheetId) {
+    throw new Error("Planilha não configurada. Volte ao onboarding.");
+  }
+  return { url, spreadsheetId };
+}
 
 async function safeFetch(url: string, options?: RequestInit): Promise<any> {
   const res = await fetch(url, { redirect: "follow", ...options });
@@ -29,7 +95,7 @@ async function safeFetch(url: string, options?: RequestInit): Promise<any> {
   if (!contentType.includes("application/json")) {
     throw new Error(
       "O Apps Script não respondeu com JSON.\n" +
-      "Verifique se está implantado como 'Qualquer pessoa pode acessar'."
+      "Verifique se está publicado como 'Qualquer pessoa pode acessar'."
     );
   }
   const data = await res.json();
@@ -37,9 +103,12 @@ async function safeFetch(url: string, options?: RequestInit): Promise<any> {
   return data;
 }
 
+// ── Chamadas ao Apps Script ────────────────────────────────────────────────
+
 export async function getSaldo(cellSaldo: string): Promise<number> {
+  const { url, spreadsheetId } = await getCredentials();
   const data = await safeFetch(
-    `${APPS_SCRIPT_URL}?action=getSaldo&cellSaldo=${encodeURIComponent(cellSaldo)}`
+    `${url}?action=getSaldo&spreadsheetId=${encodeURIComponent(spreadsheetId)}&cellSaldo=${encodeURIComponent(cellSaldo)}`
   );
   const valor = parseFloat(String(data.saldo).replace(",", "."));
   if (isNaN(valor)) throw new Error(`Valor inválido na célula ${cellSaldo}: "${data.saldo}"`);
@@ -52,10 +121,11 @@ export async function addExpense(
   cellGasto: string,
   cellSaldo: string
 ): Promise<number> {
-  const data = await safeFetch(APPS_SCRIPT_URL, {
+  const { url, spreadsheetId } = await getCredentials();
+  const data = await safeFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "addExpense", nome, valor, cellGasto, cellSaldo }),
+    body: JSON.stringify({ action: "addExpense", nome, valor, cellGasto, cellSaldo, spreadsheetId }),
   });
   const novoSaldo = parseFloat(String(data.novoSaldo).replace(",", "."));
   if (isNaN(novoSaldo)) throw new Error(`Saldo inválido recebido: "${data.novoSaldo}"`);
@@ -67,10 +137,11 @@ export async function subtractExpense(
   cellGasto: string,
   cellSaldo: string
 ): Promise<number> {
-  const data = await safeFetch(APPS_SCRIPT_URL, {
+  const { url, spreadsheetId } = await getCredentials();
+  const data = await safeFetch(url, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ action: "subtractExpense", valor, cellGasto, cellSaldo }),
+    body: JSON.stringify({ action: "subtractExpense", valor, cellGasto, cellSaldo, spreadsheetId }),
   });
   const novoSaldo = parseFloat(String(data.novoSaldo).replace(",", "."));
   if (isNaN(novoSaldo)) throw new Error(`Saldo inválido recebido: "${data.novoSaldo}"`);
@@ -86,12 +157,10 @@ export interface Despesa {
   data: string;
 }
 
-const HIST_KEY = "historico_despesas";
-
 export async function addDespesa(despesa: Omit<Despesa, "id">): Promise<Despesa> {
-  const raw = await AsyncStorage.getItem(HIST_KEY);
+  const raw   = await AsyncStorage.getItem(HIST_KEY);
   const lista: Despesa[] = raw ? JSON.parse(raw) : [];
-  const nova: Despesa = { ...despesa, id: Date.now().toString() };
+  const nova: Despesa    = { ...despesa, id: Date.now().toString() };
   lista.unshift(nova);
   await AsyncStorage.setItem(HIST_KEY, JSON.stringify(lista));
   return nova;
@@ -103,9 +172,9 @@ export async function getDespesas(): Promise<Despesa[]> {
 }
 
 export async function removeDespesa(id: string): Promise<void> {
-  const raw = await AsyncStorage.getItem(HIST_KEY);
+  const raw   = await AsyncStorage.getItem(HIST_KEY);
   const lista: Despesa[] = raw ? JSON.parse(raw) : [];
-  const nova = lista.filter((d) => d.id !== id);
+  const nova  = lista.filter((d) => d.id !== id);
   await AsyncStorage.setItem(HIST_KEY, JSON.stringify(nova));
 }
 

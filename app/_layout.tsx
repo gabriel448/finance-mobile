@@ -6,7 +6,7 @@ import {
 import { Stack, useRouter, usePathname, useSegments } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { getCellConfig } from "../services/sheetsService";
+import { getCellConfig, getScriptUrl } from "../services/sheetsService";
 
 const DRAWER_WIDTH = 280;
 
@@ -26,15 +26,32 @@ export default function RootLayout() {
   useEffect(() => {
     if (checked.current) return;
     checked.current = true;
-    getCellConfig().then((config) => {
-      setReady(true);
-      if (!config) {
-        router.replace("/setup");
-      } else if (segments[0] === "login") {
-        // Limpa cache da sessão anterior com OAuth
-        router.replace("/");
+
+    let destination: string | null = null;
+
+    (async () => {
+      try {
+        const scriptUrl = await getScriptUrl();
+        if (!scriptUrl) {
+          destination = "/onboarding";
+          return;
+        }
+        const config = await getCellConfig();
+        if (!config) {
+          destination = "/setup";
+        }
+        // Se tudo OK, permanece na rota atual (index)
+      } catch (e) {
+        // Em caso de erro inesperado, envia para o onboarding
+        destination = "/onboarding";
+      } finally {
+        setReady(true);
+        if (destination) {
+          // Aguarda o navegador montar antes de redirecionar
+          setTimeout(() => router.replace(destination as any), 0);
+        }
       }
-    });
+    })();
   }, []);
 
   // ── Animação do drawer ───────────────────────────────────────────────────
@@ -53,7 +70,7 @@ export default function RootLayout() {
 
   useEffect(() => { setDrawerOpen(false); }, [pathname]);
 
-  const isSetup = pathname === "/setup";
+  const isSetup = pathname === "/setup" || pathname === "/onboarding";
 
   const navItems = [
     { label: "Início",        icon: "home-outline"     as const, route: "/"         },
@@ -82,11 +99,12 @@ export default function RootLayout() {
           ),
         }}
       >
-        <Stack.Screen name="login"    options={{ headerShown: false }} />
-        <Stack.Screen name="setup"    options={{ title: "Configurar células", headerLeft: () => null }} />
-        <Stack.Screen name="index"    options={{ title: "Finanças" }} />
-        <Stack.Screen name="history"  options={{ title: "Histórico" }} />
-        <Stack.Screen name="settings" options={{ title: "Configurações" }} />
+        <Stack.Screen name="login"       options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding"  options={{ headerShown: false }} />
+        <Stack.Screen name="setup"       options={{ title: "Configurar células", headerLeft: () => null }} />
+        <Stack.Screen name="index"       options={{ title: "Finanças" }} />
+        <Stack.Screen name="history"     options={{ title: "Histórico" }} />
+        <Stack.Screen name="settings"    options={{ title: "Configurações" }} />
       </Stack>
 
       {/* Loading overlay */}

@@ -5,19 +5,21 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { saveCellConfig, getCellConfig, getSaldo } from "../services/sheetsService";
+import { saveCellConfig, getCellConfig, getSaldo, getScriptUrl, clearScriptUrl } from "../services/sheetsService";
 
 export default function SetupScreen() {
   const router = useRouter();
   const [cellSaldo, setCellSaldo] = useState("F9");
   const [cellGasto, setCellGasto] = useState("I8");
   const [loading,   setLoading]   = useState(false);
+  const [scriptUrl, setScriptUrl] = useState("");
 
   // Pré-preenche se já existir configuração
   useEffect(() => {
     getCellConfig().then((c) => {
       if (c) { setCellSaldo(c.cellSaldo); setCellGasto(c.cellGasto); }
     });
+    getScriptUrl().then((u) => setScriptUrl(u ?? ""));
   }, []);
 
   async function handleSalvar() {
@@ -29,7 +31,6 @@ export default function SetupScreen() {
     }
     setLoading(true);
     try {
-      // Testa a leitura antes de salvar
       const valor = await getSaldo(saldo);
       await saveCellConfig({ cellSaldo: saldo, cellGasto: gasto });
       Alert.alert(
@@ -44,6 +45,29 @@ export default function SetupScreen() {
     }
   }
 
+  async function handleTrocarPlanilha() {
+    Alert.alert(
+      "Trocar planilha?",
+      "Isso removerá a URL do script configurada. Você precisará configurar novamente.",
+      [
+        { text: "Cancelar", style: "cancel" },
+        {
+          text: "Trocar",
+          style: "destructive",
+          onPress: async () => {
+            await clearScriptUrl();
+            router.replace("/onboarding");
+          },
+        },
+      ]
+    );
+  }
+
+  // URL resumida para exibição
+  const urlDisplay = scriptUrl
+    ? scriptUrl.replace("https://script.google.com/macros/s/", "…/s/").slice(0, 40) + "…"
+    : "Não configurada";
+
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: "#0d1117" }}
@@ -55,6 +79,13 @@ export default function SetupScreen() {
         <Text style={styles.subtitle}>
           Informe quais células da planilha{"\n"}correspondem ao saldo e aos gastos.
         </Text>
+
+        {/* Script conectado */}
+        <TouchableOpacity style={styles.scriptChip} onPress={handleTrocarPlanilha} activeOpacity={0.75}>
+          <Ionicons name="link-outline" size={14} color="#3fb950" />
+          <Text style={styles.scriptChipText} numberOfLines={1}>{urlDisplay}</Text>
+          <Ionicons name="swap-horizontal-outline" size={14} color="#484f58" />
+        </TouchableOpacity>
 
         <View style={styles.card}>
           <Text style={styles.label}>Célula do saldo disponível</Text>
@@ -107,7 +138,17 @@ export default function SetupScreen() {
 const styles = StyleSheet.create({
   container: { padding: 24, paddingTop: 48, alignItems: "center" },
   title:    { color: "#e6edf3", fontSize: 24, fontWeight: "800", marginBottom: 8, textAlign: "center" },
-  subtitle: { color: "#8b949e", fontSize: 14, textAlign: "center", lineHeight: 20, marginBottom: 32 },
+  subtitle: { color: "#8b949e", fontSize: 14, textAlign: "center", lineHeight: 20, marginBottom: 20 },
+
+  scriptChip: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: "#161b22", borderRadius: 20,
+    borderWidth: 1, borderColor: "#238636",
+    paddingHorizontal: 14, paddingVertical: 7,
+    marginBottom: 24, maxWidth: "100%",
+  },
+  scriptChipText: { color: "#3fb950", fontSize: 11, flex: 1 },
+
   card: {
     width: "100%", backgroundColor: "#161b22",
     borderRadius: 16, borderWidth: 1, borderColor: "#21262d", padding: 20,

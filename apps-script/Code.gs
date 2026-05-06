@@ -1,15 +1,21 @@
-// Google Apps Script — Finance Tracker Backend
-// Planilha: 1ZiU0YLvLnYbnIaphf1cI_6gb0IITG94JkrVTWG8VtKY
-// Publicado como Web App → Qualquer pessoa pode acessar
+// Google Apps Script — Finance Tracker Backend (Standalone / Universal)
+//
+// COMO PUBLICAR:
+//  1. Acesse script.google.com e crie um novo projeto
+//  2. Apague tudo e cole este código
+//  3. Clique em "Implantar" → "Nova implantação"
+//  4. Tipo: "App da Web"
+//     • Executar como: Eu (seu e-mail)
+//     • Quem tem acesso: Qualquer pessoa
+//  5. Clique em "Implantar" e autorize as permissões
+//  6. Copie a URL gerada e cole no app
+//
+// O script funciona como um proxy autônomo:
+// o spreadsheetId é enviado pelo app a cada requisição.
 
-var SPREADSHEET_ID = "1ZiU0YLvLnYbnIaphf1cI_6gb0IITG94JkrVTWG8VtKY";
-var SHEET_NAME     = "Página1";
-
-function getSheet() {
-  var ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-  if (!ss) throw new Error("Planilha não encontrada. Verifique o SPREADSHEET_ID.");
-
-  // Usa a primeira aba da planilha (independente do nome)
+function getSheet(spreadsheetId) {
+  var ss = SpreadsheetApp.openById(spreadsheetId);
+  if (!ss) throw new Error("Planilha não encontrada. Verifique o link informado.");
   var sheet = ss.getSheets()[0];
   if (!sheet) throw new Error("Nenhuma aba encontrada na planilha.");
   return sheet;
@@ -17,11 +23,21 @@ function getSheet() {
 
 function doGet(e) {
   try {
-    var action    = (e && e.parameter && e.parameter.action)    || "";
-    var cellSaldo = (e && e.parameter && e.parameter.cellSaldo) || "F9";
+    var action          = (e && e.parameter && e.parameter.action)          || "";
+    var spreadsheetId   = (e && e.parameter && e.parameter.spreadsheetId)   || "";
+    var cellSaldo       = (e && e.parameter && e.parameter.cellSaldo)       || "F9";
+
+    if (action === "ping") {
+      if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true, title: ss.getName() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
 
     if (action === "getSaldo") {
-      var sheet = getSheet();
+      if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
+      var sheet = getSheet(spreadsheetId);
       var saldo = sheet.getRange(cellSaldo).getValue();
       return ContentService
         .createTextOutput(JSON.stringify({ saldo: saldo }))
@@ -41,12 +57,15 @@ function doGet(e) {
 
 function doPost(e) {
   try {
-    var body      = JSON.parse(e.postData.contents);
-    var cellGasto = body.cellGasto || "I8";
-    var cellSaldo = body.cellSaldo || "F9";
+    var body            = JSON.parse(e.postData.contents);
+    var spreadsheetId   = body.spreadsheetId || "";
+    var cellGasto       = body.cellGasto      || "I8";
+    var cellSaldo       = body.cellSaldo      || "F9";
+
+    if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
 
     if (body.action === "addExpense") {
-      var sheet      = getSheet();
+      var sheet      = getSheet(spreadsheetId);
       var valor      = parseFloat(body.valor);
       var gastoAtual = parseFloat(sheet.getRange(cellGasto).getValue()) || 0;
 
@@ -61,10 +80,10 @@ function doPost(e) {
     }
 
     if (body.action === "subtractExpense") {
-      var sheet      = getSheet();
+      var sheet      = getSheet(spreadsheetId);
       var valor      = parseFloat(body.valor);
       var gastoAtual = parseFloat(sheet.getRange(cellGasto).getValue()) || 0;
-      var novoGasto  = Math.max(0, gastoAtual - valor); // nunca negativo
+      var novoGasto  = Math.max(0, gastoAtual - valor);
 
       sheet.getRange(cellGasto).setValue(novoGasto);
       SpreadsheetApp.flush();
