@@ -1,0 +1,100 @@
+[
+    {
+        "transaction_id": "0d30cdc9-e8ca-479e-af6c-8e0497a91213",
+        "expense_name": "tapioca",
+        "amount": 15.0,
+        "timestamp_iso": "2026-05-04T13:46:24.404524",
+        "cloud_synced": false
+    },
+    {
+        "transaction_id": "66bf6dc8-d1af-43ed-bfc1-71855a5a342d",
+        "expense_name": "tapioca",
+        "amount": 15.0,
+        "timestamp_iso": "2026-05-04T13:48:17.064544",
+        "cloud_synced": false
+    },
+    {
+        "transaction_id": "32869ea4-9e54-4491-b77f-f9a87e75c082",
+        "expense_name": "tapioca",
+        "amount": 15.0,
+        "timestamp_iso": "2026-05-04T13:50:05.960729",
+        "cloud_synced": false
+    },
+    {
+        "transaction_id": "3b7ccfd9-71eb-4def-b260-ff24f383913e",
+        "expense_name": "tapioca",
+        "amount": 15.0,
+        "timestamp_iso": "2026-05-04T13:51:01.992372",
+        "cloud_synced": false
+    },
+    {
+        "transaction_id": "73677310-f051-489e-8bb0-4282d63e1968",
+        "expense_name": "tapioca",
+        "amount": 15.0,
+        "timestamp_iso": "2026-05-04T13:52:54.432520",
+        "cloud_synced": false
+    },
+    {
+        "transaction_id": "07514c33-83d5-4380-a0e8-8e3310042d35",
+        "expense_name": "dog burguer",
+        "amount": 28.0,
+        "timestamp_iso": "2026-05-04T13:53:34.055562",
+        "cloud_synced": false
+    },
+    {
+        "transaction_id": "46bac355-52e3-4223-a367-49b0680bdacb",
+        "expense_name": "dog bug",
+        "amount": 28.0,
+        "timestamp_iso": "2026-05-04T13:58:07.713101",
+        "cloud_synced": false
+    },
+    {
+        "transaction_id": "3e6b77a7-0797-4f1a-81ff-41ea9c38665f",
+        "expense_name": "tapioca",
+        "amount": 15.78,
+        "timestamp_iso": "2026-05-04T14:08:57.780977",
+        "cloud_synced": false
+    },
+    {
+        "transaction_id": "4e53f9d4-ecd4-41c8-a420-52511862f0c3",
+        "expense_name": "tapioca",
+        "amount": 15.0,
+        "timestamp_iso": "2026-05-04T14:16:24.218970",
+        "cloud_synced": false
+    },
+    {
+        "transaction_id": "a44154c4-efd7-4701-84d6-f7a2438ccecf",
+        "expense_name": "tapioca",
+        "amount": 15.0,
+        "timestamp_iso": "2026-05-04T14:34:17.024125",
+        "cloud_synced": false
+    },
+    {
+        "transaction_id": "6a6552ca-5a81-4da9-8c5e-5bc1e8c82127",
+        "expense_name": "tapioca",
+        "amount": 15.0,
+        "timestamp_iso": "2026-05-04T14:47:17.422859",
+        "cloud_synced": false
+    },
+    {
+        "transaction_id": "ad317911-fe5c-4f51-9070-3a2ed1c4d95a",
+        "expense_name": "tapioca",
+        "amount": 15.0,
+        "timestamp_iso": "2026-05-04T14:51:42.427877",
+        "cloud_synced": false
+    },
+    {
+        "transaction_id": "8a9ee939-de2b-447d-a997-4b490936055e",
+        "expense_name": "tapioca",
+        "amount": 15.0,
+        "timestamp_iso": "2026-05-04T14:57:32.795476",
+        "cloud_synced": false
+    },
+    {
+        "transaction_id": "064b5cda-60de-406e-bb97-714d863aa43c",
+        "expense_name": "tapioca",
+        "amount": 15.0,
+        "timestamp_iso": "2026-05-05T10:20:49.017477",
+        "cloud_synced": false
+    }
+]
