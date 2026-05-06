@@ -5,10 +5,29 @@ from datetime import datetime
 
 class LocalStorage:
     def __init__(self):
-        # Utiliza o sandboxing seguro do Android/iOS
-        self.caminho = os.getenv("FLET_APP_STORAGE_DATA", "historico_despesas.json")
-        if not self.caminho.endswith(".json"):
-            self.caminho = os.path.join(self.caminho, "historico_despesas.json")
+        # Procura o arquivo subindo os diretórios (útil caso o Flet mude o CWD)
+        diretorio_atual = os.path.abspath(os.path.dirname(__file__))
+        caminho_encontrado = None
+        
+        # Sobe até 3 níveis procurando o arquivo
+        for _ in range(3):
+            tentativa = os.path.join(diretorio_atual, "historico_despesas.json")
+            if os.path.exists(tentativa):
+                caminho_encontrado = tentativa
+                break
+            diretorio_atual = os.path.dirname(diretorio_atual)
+            
+        if caminho_encontrado:
+            # Modo de desenvolvimento local
+            self.caminho = caminho_encontrado
+        else:
+            # Em produção/mobile, utiliza o sandboxing do sistema operacional
+            pasta_dados = os.getenv("FLET_APP_STORAGE_DATA", "")
+            if pasta_dados:
+                self.caminho = os.path.join(pasta_dados, "historico_despesas.json")
+                os.makedirs(pasta_dados, exist_ok=True)
+            else:
+                self.caminho = "historico_despesas.json"
 
     def salvar_despesa(self, nome: str, valor: float):
         nova_despesa = {
