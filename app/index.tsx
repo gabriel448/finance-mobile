@@ -17,71 +17,99 @@ function formatCurrency(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+// ── Cache de módulo: sobrevive à desmontagem do componente (Stack navigator) ──
+let cachedSaldo: number | null = null;
+
+type LoadMode = "idle" | "bg" | "full";
+// bg   → Estado 1: valor visível + spinner pequeno no canto
+// full → Estado 2: valor some + spinner grande no centro
+
 export default function HomeScreen() {
   const router = useRouter();
-  const [saldo, setSaldo]               = useState<number | null>(null);
-  const [loading, setLoading]           = useState(true);
-  const [erro, setErro]                 = useState("");
+
+  // Inicializa com cache — se já temos um valor, não pisca ao voltar
+  const [saldo,        setSaldo]        = useState<number | null>(cachedSaldo);
+  const [loadMode,     setLoadMode]     = useState<LoadMode>("idle");
+  const [erro,         setErro]         = useState("");
   const [modalVisible, setModalVisible] = useState(false);
-  const [cellSaldo, setCellSaldo]       = useState("F9");
   const [pulseAnim]                     = useState(new Animated.Value(1));
 
-  async function carregarSaldo() {
-    setLoading(true);
+  // ── Função central de carga ───────────────────────────────────────────────
+  async function carregarSaldo(mode: "bg" | "full") {
+    setLoadMode(mode);
     setErro("");
+    if (mode === "full") setSaldo(null); // Estado 2: apaga o valor
     try {
       const config = await getCellConfig();
       if (!config) { router.replace("/setup"); return; }
-      setCellSaldo(config.cellSaldo);
       const s = await getSaldo(config.cellSaldo);
+      cachedSaldo = s;  // persiste para próxima montagem
       setSaldo(s);
     } catch (e: any) {
-      setErro(e.message ?? "Não foi possível carregar o saldo.");
+      setErro(e.message ?? "Erro ao carregar saldo.");
     } finally {
-      setLoading(false);
+      setLoadMode("idle");
     }
   }
 
-  useFocusEffect(useCallback(() => { carregarSaldo(); }, []));
+  // ── Ao ganhar foco ────────────────────────────────────────────────────────
+  // Primeiro acesso (sem cache) → full (Estado 2)
+  // Retornando de outra aba (com cache) → bg (Estado 1, valor permanece)
+  useFocusEffect(useCallback(() => {
+    carregarSaldo(cachedSaldo !== null ? "bg" : "full");
+  }, []));
 
-  function pulseRefresh() {
+  // ── Botão Atualizar → sempre Estado 2 ────────────────────────────────────
+  function handleRefreshBtn() {
     Animated.sequence([
       Animated.timing(pulseAnim, { toValue: 0.85, duration: 100, useNativeDriver: true, easing: Easing.out(Easing.ease) }),
       Animated.timing(pulseAnim, { toValue: 1,    duration: 150, useNativeDriver: true, easing: Easing.out(Easing.ease) }),
     ]).start();
-    carregarSaldo();
+    carregarSaldo("full");
   }
 
-  const saldoPositivo = saldo !== null && saldo >= 0;
+  const saldoColor = saldo !== null && saldo < 0 ? "#f85149" : "#3fb950";
 
   return (
     <View style={styles.container}>
 
-      {/* Saldo Card */}
+      {/* ── Card do Saldo ── */}
       <View style={styles.card}>
+
+        {/* ESTADO 1: spinner pequeno no canto, valor visível */}
+        {loadMode === "bg" && (
+          <ActivityIndicator size="small" color="#58a6ff" style={styles.cornerSpinner} />
+        )}
+
         <Text style={styles.cardLabel}>Saldo Disponível</Text>
-        {erro ? (
-          <Text style={styles.erroText}>{erro}</Text>
-        ) : loading ? (
+
+        {/* ESTADO 2: spinner grande, valor oculto */}
+        {loadMode === "full" || saldo === null ? (
           <ActivityIndicator size="large" color="#58a6ff" style={{ marginVertical: 16 }} />
         ) : (
-          <Text style={[styles.saldoValue, { color: saldoPositivo ? "#3fb950" : "#f85149" }]}>
-            {formatCurrency(saldo!)}
+          <Text style={[styles.saldoValue, { color: saldoColor }]}>
+            {formatCurrency(saldo)}
           </Text>
         )}
-        <View style={[styles.saldoBadge, { backgroundColor: saldoPositivo ? "#1a3a2a" : "#3a1a1a" }]}>
-          <Ionicons
-            name={saldoPositivo ? "trending-up-outline" : "trending-down-outline"}
-            size={14}
-            color={saldoPositivo ? "#3fb950" : "#f85149"}
-          />
-          <Text style={[styles.badgeText, { color: saldoPositivo ? "#3fb950" : "#f85149" }]}>
-            {saldoPositivo ? "Saldo positivo" : "Saldo negativo"}
-          </Text>
-        </View>
+
+        {/* Badge — só aparece quando temos valor */}
+        {saldo !== null && loadMode !== "full" && (
+          <View style={[styles.saldoBadge, { backgroundColor: saldo >= 0 ? "#1a3a2a" : "#3a1a1a" }]}>
+            <Ionicons
+              name={saldo >= 0 ? "trending-up-outline" : "trending-down-outline"}
+              size={14}
+              color={saldoColor}
+            />
+            <Text style={[styles.badgeText, { color: saldoColor }]}>
+              {saldo >= 0 ? "Saldo positivo" : "Saldo negativo"}
+            </Text>
+          </View>
+        )}
+
+        {!!erro && <Text style={styles.erroText}>{erro}</Text>}
       </View>
 
-      {/* Botão Adicionar */}
+      {/* ── Adicionar ── */}
       <TouchableOpacity
         style={styles.btnAdicionar}
         onPress={() => setModalVisible(true)}
@@ -91,21 +119,32 @@ export default function HomeScreen() {
         <Text style={styles.btnAdicionarText}>Adicionar Despesa</Text>
       </TouchableOpacity>
 
-      {/* Refresh */}
-      <TouchableOpacity style={styles.btnRefresh} onPress={pulseRefresh} disabled={loading} activeOpacity={0.7}>
+      {/* ── Atualizar ── */}
+      <TouchableOpacity
+        style={styles.btnRefresh}
+        onPress={handleRefreshBtn}
+        disabled={loadMode !== "idle"}
+        activeOpacity={0.7}
+      >
         <Animated.View style={{ transform: [{ scale: pulseAnim }] }}>
-          {loading
-            ? <ActivityIndicator size="small" color="#58a6ff" />
-            : <Ionicons name="refresh-outline" size={20} color="#58a6ff" />
-          }
+          <Ionicons
+            name="refresh-outline"
+            size={20}
+            color={loadMode !== "idle" ? "#484f58" : "#58a6ff"}
+          />
         </Animated.View>
-        <Text style={styles.btnRefreshText}>Atualizar saldo</Text>
+        <Text style={[styles.btnRefreshText, loadMode !== "idle" && { color: "#484f58" }]}>
+          Atualizar saldo
+        </Text>
       </TouchableOpacity>
 
       <AddExpenseModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
-        onSuccess={(novoSaldo) => setSaldo(novoSaldo)}
+        onSuccess={(novoSaldo) => {
+          cachedSaldo = novoSaldo;
+          setSaldo(novoSaldo);
+        }}
       />
     </View>
   );
@@ -130,26 +169,22 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
     elevation: 8,
   },
-  cardLabel: { color: "#8b949e", fontSize: 13, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 },
+  cornerSpinner: {
+    position: "absolute",
+    top: 14,
+    right: 14,
+  },
+  cardLabel:  { color: "#8b949e", fontSize: 13, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 },
   saldoValue: { fontSize: 44, fontWeight: "800", letterSpacing: -1, marginBottom: 16 },
   saldoBadge: { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
   badgeText:  { fontSize: 13, fontWeight: "600" },
-  erroText:   { color: "#f85149", fontSize: 14, marginVertical: 16, textAlign: "center" },
+  erroText:   { color: "#f85149", fontSize: 12, marginTop: 10, textAlign: "center" },
   btnAdicionar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-    backgroundColor: "#238636",
-    borderRadius: 14,
-    paddingVertical: 16,
-    marginTop: 28,
-    shadowColor: "#238636",
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10,
+    backgroundColor: "#238636", borderRadius: 14, paddingVertical: 16, marginTop: 28,
+    shadowColor: "#238636", shadowOpacity: 0.3, shadowRadius: 12, elevation: 6,
   },
   btnAdicionarText: { color: "#fff", fontSize: 17, fontWeight: "700" },
-  btnRefresh: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 20, padding: 10 },
+  btnRefresh:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 20, padding: 10 },
   btnRefreshText: { color: "#58a6ff", fontSize: 14 },
 });

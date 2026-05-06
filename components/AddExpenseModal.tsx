@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import {
   Modal,
   View,
@@ -9,7 +9,9 @@ import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
+  Animated,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { addExpense, addDespesa, getCellConfig } from "../services/sheetsService";
 import { useAudioPlayer } from "expo-audio";
 
@@ -20,25 +22,57 @@ interface Props {
 }
 
 export default function AddExpenseModal({ visible, onClose, onSuccess }: Props) {
-  const [nome, setNome] = useState("");
-  const [valor, setValor] = useState("");
+  const [nome, setNome]       = useState("");
+  const [valor, setValor]     = useState("");
   const [loading, setLoading] = useState(false);
-  const [erro, setErro] = useState("");
-  const player = useAudioPlayer(require("../assets/check.mp3"));
+  const [erro, setErro]       = useState("");
+  const [success, setSuccess] = useState(false);
 
-  async function playCheckSound() {
-    try {
-      player.seekTo(0);
-      player.play();
-    } catch {
-      // Som opcional — ignora erros
+  const scaleAnim   = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const player      = useAudioPlayer(require("../assets/check.mp3"));
+
+  // Reseta ao abrir o modal
+  useEffect(() => {
+    if (visible) {
+      setNome(""); setValor(""); setErro(""); setSuccess(false);
+      scaleAnim.setValue(0);
+      opacityAnim.setValue(0);
     }
+  }, [visible]);
+
+  function showSuccessAndClose(novoSaldo: number) {
+    setSuccess(true);
+
+    // Som + animação de check ao mesmo tempo
+    try { player.seekTo(0); player.play(); } catch {}
+
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        bounciness: 18,
+        speed: 14,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    // Fecha após 1.4s — tempo suficiente para ver + ouvir
+    setTimeout(() => {
+      onSuccess(novoSaldo);
+      onClose();
+    }, 1400);
   }
 
   async function handleAdicionar() {
     const valorNum = parseFloat(valor.replace(",", "."));
-    if (!nome.trim()) return setErro("Informe o nome da despesa.");
+    if (!nome.trim())                    return setErro("Informe o nome da despesa.");
     if (isNaN(valorNum) || valorNum <= 0) return setErro("Informe um valor válido.");
+
     setErro("");
     setLoading(true);
     try {
@@ -46,10 +80,7 @@ export default function AddExpenseModal({ visible, onClose, onSuccess }: Props) 
       if (!config) throw new Error("Células não configuradas. Vá em Configurações.");
       const novoSaldo = await addExpense(nome.trim(), valorNum, config.cellGasto, config.cellSaldo);
       await addDespesa({ nome: nome.trim(), valor: valorNum, data: new Date().toISOString() });
-      await playCheckSound();
-      setNome(""); setValor("");
-      onSuccess(novoSaldo);
-      onClose();
+      showSuccessAndClose(novoSaldo);
     } catch (e: any) {
       setErro(e.message ?? "Erro ao adicionar. Verifique sua conexão.");
     } finally {
@@ -64,6 +95,23 @@ export default function AddExpenseModal({ visible, onClose, onSuccess }: Props) 
         style={styles.overlay}
       >
         <View style={styles.card}>
+
+          {/* ── Overlay de sucesso (aparece sobre o formulário) ── */}
+          {success && (
+            <Animated.View
+              style={[styles.successOverlay, { opacity: opacityAnim }]}
+            >
+              <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+                <View style={styles.checkCircle}>
+                  <Ionicons name="checkmark" size={56} color="#fff" />
+                </View>
+              </Animated.View>
+              <Animated.Text style={[styles.successText, { opacity: opacityAnim }]}>
+                Despesa adicionada!
+              </Animated.Text>
+            </Animated.View>
+          )}
+
           <Text style={styles.title}>Nova Despesa</Text>
 
           <Text style={styles.label}>Nome</Text>
@@ -73,7 +121,7 @@ export default function AddExpenseModal({ visible, onClose, onSuccess }: Props) 
             placeholderTextColor="#555"
             value={nome}
             onChangeText={setNome}
-            editable={!loading}
+            editable={!loading && !success}
           />
 
           <Text style={styles.label}>Valor (R$)</Text>
@@ -84,25 +132,28 @@ export default function AddExpenseModal({ visible, onClose, onSuccess }: Props) 
             value={valor}
             onChangeText={setValor}
             keyboardType="decimal-pad"
-            editable={!loading}
+            editable={!loading && !success}
           />
 
           {!!erro && <Text style={styles.erro}>{erro}</Text>}
 
           <TouchableOpacity
-            style={[styles.btnAdd, loading && styles.btnDisabled]}
+            style={[styles.btnAdd, (loading || success) && styles.btnDisabled]}
             onPress={handleAdicionar}
-            disabled={loading}
+            disabled={loading || success}
             activeOpacity={0.8}
           >
-            {loading ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.btnText}>Adicionar</Text>
-            )}
+            {loading
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.btnText}>Adicionar</Text>
+            }
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.btnCancel} onPress={onClose} disabled={loading}>
+          <TouchableOpacity
+            style={styles.btnCancel}
+            onPress={onClose}
+            disabled={loading || success}
+          >
             <Text style={styles.btnCancelText}>Cancelar</Text>
           </TouchableOpacity>
         </View>
@@ -125,7 +176,38 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
     borderTopWidth: 1,
     borderColor: "#30363d",
+    overflow: "hidden", // garante que o overlay não vaze para fora
   },
+  // ── Sucesso ──────────────────────────────────────────────────────────────
+  successOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#161b22",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  checkCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: "#238636",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#3fb950",
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  successText: {
+    color: "#3fb950",
+    fontSize: 20,
+    fontWeight: "700",
+    marginTop: 20,
+    letterSpacing: 0.3,
+  },
+  // ── Formulário ────────────────────────────────────────────────────────────
   title: {
     color: "#e6edf3",
     fontSize: 22,
@@ -164,20 +246,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginBottom: 10,
   },
-  btnDisabled: {
-    opacity: 0.6,
-  },
-  btnText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  btnCancel: {
-    alignItems: "center",
-    paddingVertical: 12,
-  },
-  btnCancelText: {
-    color: "#8b949e",
-    fontSize: 15,
-  },
+  btnDisabled: { opacity: 0.6 },
+  btnText:     { color: "#fff", fontSize: 16, fontWeight: "700" },
+  btnCancel:   { alignItems: "center", paddingVertical: 12 },
+  btnCancelText: { color: "#8b949e", fontSize: 15 },
 });

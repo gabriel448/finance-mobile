@@ -3,7 +3,7 @@ import {
   View, Text, TouchableOpacity, TouchableWithoutFeedback,
   Animated, StyleSheet, StatusBar, ActivityIndicator,
 } from "react-native";
-import { Stack, useRouter, usePathname } from "expo-router";
+import { Stack, useRouter, usePathname, useSegments } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getCellConfig } from "../services/sheetsService";
@@ -13,6 +13,7 @@ const DRAWER_WIDTH = 280;
 export default function RootLayout() {
   const router   = useRouter();
   const pathname = usePathname();
+  const segments = useSegments();
   const checked  = useRef(false);
 
   const [ready,      setReady]      = useState(false);
@@ -27,7 +28,12 @@ export default function RootLayout() {
     checked.current = true;
     getCellConfig().then((config) => {
       setReady(true);
-      if (!config) router.replace("/setup");
+      if (!config) {
+        router.replace("/setup");
+      } else if (segments[0] === "login") {
+        // Limpa cache da sessão anterior com OAuth
+        router.replace("/");
+      }
     });
   }, []);
 
