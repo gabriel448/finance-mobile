@@ -9,7 +9,7 @@ import {
   RefreshControl,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
-import { getHistorico, Despesa } from "../services/localStorage";
+import { getDespesas, Despesa } from "../services/sheetsService";
 import ExpenseDetailModal from "../components/ExpenseDetailModal";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -32,7 +32,7 @@ export default function HistoryScreen() {
   const [detailVisible, setDetailVisible] = useState(false);
 
   async function carregarHistorico() {
-    const data = await getHistorico();
+    const data = await getDespesas();
     setHistorico(data);
   }
 

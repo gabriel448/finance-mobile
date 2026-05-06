@@ -10,10 +10,8 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { addExpense } from "../services/sheetsAPIService";
-import { addDespesa, getValidToken, getSheetConfig } from "../services/localStorage";
+import { addExpense, addDespesa, getCellConfig } from "../services/sheetsService";
 import { useAudioPlayer } from "expo-audio";
-import { useRouter } from "expo-router";
 
 interface Props {
   visible: boolean;
@@ -26,7 +24,6 @@ export default function AddExpenseModal({ visible, onClose, onSuccess }: Props) 
   const [valor, setValor] = useState("");
   const [loading, setLoading] = useState(false);
   const [erro, setErro] = useState("");
-  const router = useRouter();
   const player = useAudioPlayer(require("../assets/check.mp3"));
 
   async function playCheckSound() {
@@ -42,25 +39,15 @@ export default function AddExpenseModal({ visible, onClose, onSuccess }: Props) 
     const valorNum = parseFloat(valor.replace(",", "."));
     if (!nome.trim()) return setErro("Informe o nome da despesa.");
     if (isNaN(valorNum) || valorNum <= 0) return setErro("Informe um valor válido.");
-
     setErro("");
     setLoading(true);
     try {
-      const token  = await getValidToken();
-      const config = await getSheetConfig();
-      if (!token || !config) { router.replace("/login"); return; }
-
-      const novoSaldo = await addExpense(
-        token,
-        config.spreadsheetId,
-        config.cellGasto,
-        config.cellSaldo,
-        valorNum
-      );
+      const config = await getCellConfig();
+      if (!config) throw new Error("Células não configuradas. Vá em Configurações.");
+      const novoSaldo = await addExpense(nome.trim(), valorNum, config.cellGasto, config.cellSaldo);
       await addDespesa({ nome: nome.trim(), valor: valorNum, data: new Date().toISOString() });
       await playCheckSound();
-      setNome("");
-      setValor("");
+      setNome(""); setValor("");
       onSuccess(novoSaldo);
       onClose();
     } catch (e: any) {

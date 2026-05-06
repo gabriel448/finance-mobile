@@ -10,8 +10,7 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getValidToken, getSheetConfig } from "../services/localStorage";
-import { getSaldo } from "../services/sheetsAPIService";
+import { getSaldo, getCellConfig } from "../services/sheetsService";
 import AddExpenseModal from "../components/AddExpenseModal";
 
 function formatCurrency(value: number): string {
@@ -24,19 +23,17 @@ export default function HomeScreen() {
   const [loading, setLoading]           = useState(true);
   const [erro, setErro]                 = useState("");
   const [modalVisible, setModalVisible] = useState(false);
-  const [sheetName, setSheetName]       = useState("");
+  const [cellSaldo, setCellSaldo]       = useState("F9");
   const [pulseAnim]                     = useState(new Animated.Value(1));
 
   async function carregarSaldo() {
     setLoading(true);
     setErro("");
     try {
-      const token  = await getValidToken();
-      const config = await getSheetConfig();
-      if (!token)  { router.replace("/login");  return; }
-      if (!config) { router.replace("/setup");  return; }
-      setSheetName(config.spreadsheetName ?? "");
-      const s = await getSaldo(token, config.spreadsheetId, config.cellSaldo);
+      const config = await getCellConfig();
+      if (!config) { router.replace("/setup"); return; }
+      setCellSaldo(config.cellSaldo);
+      const s = await getSaldo(config.cellSaldo);
       setSaldo(s);
     } catch (e: any) {
       setErro(e.message ?? "Não foi possível carregar o saldo.");
@@ -59,13 +56,6 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
-      {/* Nome da planilha */}
-      {sheetName ? (
-        <View style={styles.sheetBadge}>
-          <Ionicons name="document-text-outline" size={13} color="#58a6ff" />
-          <Text style={styles.sheetBadgeText} numberOfLines={1}>{sheetName}</Text>
-        </View>
-      ) : null}
 
       {/* Saldo Card */}
       <View style={styles.card}>
@@ -128,21 +118,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: 16,
   },
-  sheetBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    alignSelf: "center",
-    backgroundColor: "#161b22",
-    borderWidth: 1,
-    borderColor: "#21262d",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    marginBottom: 16,
-    maxWidth: "90%",
-  },
-  sheetBadgeText: { color: "#58a6ff", fontSize: 12, fontWeight: "600" },
   card: {
     backgroundColor: "#161b22",
     borderRadius: 20,
