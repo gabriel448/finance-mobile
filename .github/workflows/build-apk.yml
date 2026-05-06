@@ -14,6 +14,17 @@ jobs:
       - name: Baixar Código
         uses: actions/checkout@v4
 
+      - name: Configurar Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Configurar Flutter (Aceita Licenças do Android)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: 'stable'
+
       - name: Configurar Python
         uses: actions/setup-python@v5
         with:
@@ -24,7 +35,7 @@ jobs:
 
       - name: Compilar APK do Aplicativo
         # O Flet vai ler automaticamente o requirements.txt para incluir o flet_audio no APK
-        # A flag --yes serve para aceitar automaticamente qualquer download (ex: Flutter SDK) que o Flet precise fazer na nuvem.
+        # A flag --yes serve para aceitar qualquer prompt silenciosamente
         run: flet build apk --yes
 
       - name: Disponibilizar APK para Download
