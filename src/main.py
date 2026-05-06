@@ -6,6 +6,7 @@ from sheets_api import SheetsService
 from local_storage import LocalStorage
 import asyncio
 from datetime import datetime
+import flet_audio as fta
 
 
 
@@ -19,6 +20,7 @@ async def main(page: ft.Page):
     # Inicializa serviços
     sheets = SheetsService()
     storage = LocalStorage()
+    audio_check = fta.Audio(src="check.mp3", autoplay=False)
 
     async def processar_novo_gasto(e):
         ui.btn_confirmar.visible = False
@@ -39,7 +41,8 @@ async def main(page: ft.Page):
         if novo_saldo:
             storage.salvar_despesa(nome, valor)
 
-        ui.icone_sucesso.opacity = 1
+        # Descomente a linha abaixo quando for "buildar" o app (APK/Web)
+        await audio_check.play()
         
         page.update()
 
@@ -197,8 +200,7 @@ async def main(page: ft.Page):
         ui.build_layout(),
         botoes_acao
     )
-    page.update()
-    page.overlay.extend([ui.dialogo, ui.dialogo_detalhes])
+    page.overlay.extend([ui.dialogo, ui.dialogo_detalhes, audio_check])
     page.update()
     # Executa a função assíncrona em segundo plano sem travar a UI
     page.run_task(atualizar_saldo)

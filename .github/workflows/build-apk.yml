@@ -1,0 +1,33 @@
+name: Build APK
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch: # Permite iniciar a compilação manualmente clicando em um botão
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Baixar Código
+        uses: actions/checkout@v4
+
+      - name: Configurar Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Instalar Dependências (Flet e Flet Audio)
+        run: pip install -r requirements.txt
+
+      - name: Compilar APK do Aplicativo
+        # O argumento --include-packages flet_audio é o segredo para garantir que o áudio seja empacotado no APK!
+        run: flet build apk --include-packages flet_audio
+
+      - name: Disponibilizar APK para Download
+        uses: actions/upload-artifact@v4
+        with:
+          name: financas-mobile-apk
+          path: build/apk/app-release.apk

@@ -96,5 +96,19 @@
         "amount": 15.0,
         "timestamp_iso": "2026-05-05T10:20:49.017477",
         "cloud_synced": false
+    },
+    {
+        "transaction_id": "2173d1bc-3995-4071-a9ee-14ea43130f06",
+        "expense_name": "teste",
+        "amount": 10.0,
+        "timestamp_iso": "2026-05-06T08:01:41.223438",
+        "cloud_synced": false
+    },
+    {
+        "transaction_id": "b5829177-c880-42c2-972a-3835279f49c6",
+        "expense_name": "teste",
+        "amount": 10.0,
+        "timestamp_iso": "2026-05-06T08:03:50.715761",
+        "cloud_synced": false
     }
 ]
