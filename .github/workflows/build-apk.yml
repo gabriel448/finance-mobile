@@ -24,7 +24,8 @@ jobs:
 
       - name: Compilar APK do Aplicativo
         # O Flet vai ler automaticamente o requirements.txt para incluir o flet_audio no APK
-        run: flet build apk
+        # A flag --yes serve para aceitar automaticamente qualquer download (ex: Flutter SDK) que o Flet precise fazer na nuvem.
+        run: flet build apk --yes
 
       - name: Disponibilizar APK para Download
         uses: actions/upload-artifact@v4
