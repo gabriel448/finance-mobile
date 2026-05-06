@@ -108,3 +108,7 @@ export async function removeDespesa(id: string): Promise<void> {
   const nova = lista.filter((d) => d.id !== id);
   await AsyncStorage.setItem(HIST_KEY, JSON.stringify(nova));
 }
+
+export async function clearDespesas(): Promise<void> {
+  await AsyncStorage.removeItem(HIST_KEY);
+}
