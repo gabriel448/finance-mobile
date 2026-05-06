@@ -8,10 +8,6 @@ import asyncio
 from datetime import datetime
 import flet_audio as fta
 
-
-
-
-
 async def main(page: ft.Page):
     page.theme_mode = ft.ThemeMode.DARK
     page.horizontal_alignment = ft.CrossAxisAlignment.CENTER

@@ -23,8 +23,8 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Compilar APK do Aplicativo
-        # O argumento --include-packages flet_audio é o segredo para garantir que o áudio seja empacotado no APK!
-        run: flet build apk --include-packages flet_audio
+        # O Flet vai ler automaticamente o requirements.txt para incluir o flet_audio no APK
+        run: flet build apk
 
       - name: Disponibilizar APK para Download
         uses: actions/upload-artifact@v4
