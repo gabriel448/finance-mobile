@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from "react";
 import {
   View, Text, TouchableOpacity, TouchableWithoutFeedback,
-  Animated, StyleSheet, StatusBar, ActivityIndicator,
+  Animated, StyleSheet, StatusBar, ActivityIndicator, Platform,
 } from "react-native";
+import * as NavigationBar from "expo-navigation-bar";
 import { Stack, useRouter, usePathname, useSegments } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -52,6 +53,11 @@ export default function RootLayout() {
         }
       }
     })();
+
+    if (Platform.OS === "android") {
+      NavigationBar.setVisibilityAsync("hidden");
+      NavigationBar.setBehaviorAsync("overlay-swipe");
+    }
   }, []);
 
   // ── Animação do drawer ───────────────────────────────────────────────────
