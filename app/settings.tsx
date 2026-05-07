@@ -57,6 +57,12 @@ export default function SettingsScreen() {
         <Row icon="stats-chart-outline" label="Célula do saldo"  value={config?.cellSaldo ?? "—"} />
         <View style={styles.divider} />
         <Row icon="add-circle-outline"  label="Célula de gastos" value={config?.cellGasto ?? "—"} />
+        {config?.cellParcelasStart && (
+          <>
+            <View style={styles.divider} />
+            <Row icon="card-outline" label="Célula de parcelas" value={config.cellParcelasStart} />
+          </>
+        )}
       </View>
       <TouchableOpacity style={styles.btn} onPress={() => router.push("/setup")} activeOpacity={0.85}>
         <Ionicons name="pencil-outline" size={18} color="#fff" />

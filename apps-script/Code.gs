@@ -44,6 +44,34 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (action === "getInstallments") {
+      var cellParcelasStart = (e && e.parameter && e.parameter.cellParcelasStart) || "";
+      if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
+      if (!cellParcelasStart) throw new Error("Célula inicial de parcelas não configurada.");
+      
+      var sheet = getSheet(spreadsheetId);
+      var startRange = sheet.getRange(cellParcelasStart);
+      var startRow = startRange.getRow();
+      var startCol = startRange.getColumn();
+      
+      var data = sheet.getRange(startRow, startCol, 100, 3).getValues();
+      var installments = [];
+      for (var i = 0; i < data.length; i++) {
+        var row = data[i];
+        if (row[0] !== "" || row[1] !== "" || row[2] !== "") {
+          installments.push({
+            rowIndex: startRow + i,
+            restantes: parseInt(row[0]) || 0,
+            nome: row[1],
+            valor: parseFloat(String(row[2]).replace(',', '.')) || 0
+          });
+        }
+      }
+      return ContentService
+        .createTextOutput(JSON.stringify({ installments: installments }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     return ContentService
       .createTextOutput(JSON.stringify({ error: "Ação desconhecida: " + action }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -92,6 +120,96 @@ function doPost(e) {
       var novoSaldo = sheet.getRange(cellSaldo).getValue();
       return ContentService
         .createTextOutput(JSON.stringify({ novoSaldo: novoSaldo }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "addInstallment") {
+      var sheet = getSheet(spreadsheetId);
+      var cellParcelasStart = body.cellParcelasStart;
+      var startRange = sheet.getRange(cellParcelasStart);
+      var startRow = startRange.getRow();
+      var startCol = startRange.getColumn();
+      
+      var data = sheet.getRange(startRow, startCol, 100, 3).getValues();
+      var targetRowIndex = startRow + 99;
+      for (var i = 0; i < data.length; i++) {
+        if (data[i][0] === "" && data[i][1] === "" && data[i][2] === "") {
+          targetRowIndex = startRow + i;
+          break;
+        }
+      }
+      
+      sheet.getRange(targetRowIndex, startCol, 1, 3).setValues([[
+        body.restantes,
+        body.nome,
+        body.valor
+      ]]);
+      
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "deleteInstallment") {
+      var sheet = getSheet(spreadsheetId);
+      var cellParcelasStart = body.cellParcelasStart;
+      var rowIndex = parseInt(body.rowIndex);
+      var startCol = sheet.getRange(cellParcelasStart).getColumn();
+      
+      sheet.getRange(rowIndex, startCol, 1, 3).clearContent();
+      
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "payInstallment") {
+      var sheet = getSheet(spreadsheetId);
+      var cellParcelasStart = body.cellParcelasStart;
+      var rowIndex = parseInt(body.rowIndex);
+      var startCol = sheet.getRange(cellParcelasStart).getColumn();
+      
+      var remainingCell = sheet.getRange(rowIndex, startCol);
+      var currentRemaining = parseInt(remainingCell.getValue()) || 0;
+      var remaining = Math.max(0, currentRemaining - 1);
+      
+      if (remaining === 0) {
+        sheet.getRange(rowIndex, startCol, 1, 3).clearContent();
+      } else {
+        remainingCell.setValue(remaining);
+      }
+      
+      return ContentService
+        .createTextOutput(JSON.stringify({ remaining: remaining }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "payAllInstallments") {
+      var sheet = getSheet(spreadsheetId);
+      var cellParcelasStart = body.cellParcelasStart;
+      var startRange = sheet.getRange(cellParcelasStart);
+      var startRow = startRange.getRow();
+      var startCol = startRange.getColumn();
+      
+      var dataRange = sheet.getRange(startRow, startCol, 100, 3);
+      var data = dataRange.getValues();
+      
+      for (var i = 0; i < data.length; i++) {
+        var row = data[i];
+        if (row[0] !== "" || row[1] !== "" || row[2] !== "") {
+          var remaining = (parseInt(row[0]) || 0) - 1;
+          if (remaining <= 0) {
+            data[i] = ["", "", ""];
+          } else {
+            data[i][0] = remaining;
+          }
+        }
+      }
+      
+      dataRange.setValues(data);
+      
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 

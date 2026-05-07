@@ -1,0 +1,276 @@
+import React, { useState, useRef, useEffect } from "react";
+import {
+  Modal,
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+  Animated,
+} from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import { addInstallmentToSheet, getCellConfig } from "../services/sheetsService";
+import { addDespesa } from "../services/localStorage";
+import { useAudioPlayer } from "expo-audio";
+
+interface Props {
+  visible: boolean;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+export default function AddInstallmentModal({ visible, onClose, onSuccess }: Props) {
+  const [nome, setNome]       = useState("");
+  const [valor, setValor]     = useState("");
+  const [restantes, setRestantes] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [erro, setErro]       = useState("");
+  const [success, setSuccess] = useState(false);
+
+  const scaleAnim   = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const player      = useAudioPlayer(require("../assets/check.mp3"));
+
+  useEffect(() => {
+    if (visible) {
+      setNome(""); setValor(""); setRestantes(""); setErro(""); setSuccess(false);
+      scaleAnim.setValue(0);
+      opacityAnim.setValue(0);
+    }
+  }, [visible]);
+
+  function showSuccessAndClose() {
+    setSuccess(true);
+
+    try {
+      player.volume = 1.0;
+      player.seekTo(0);
+      player.play();
+    } catch {
+      // Som opcional
+    }
+
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        bounciness: 18,
+        speed: 14,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    setTimeout(() => {
+      onSuccess();
+      onClose();
+    }, 1400);
+  }
+
+  async function handleAdicionar() {
+    const valorNum = parseFloat(valor.replace(",", "."));
+    const restNum = parseInt(restantes);
+    
+    if (!nome.trim()) return setErro("Informe o nome do produto.");
+    if (isNaN(valorNum) || valorNum <= 0) return setErro("Informe um valor válido.");
+    if (isNaN(restNum) || restNum <= 0) return setErro("Informe uma quantidade válida de parcelas.");
+
+    setErro("");
+    setLoading(true);
+    try {
+      const config = await getCellConfig();
+      if (!config || !config.cellParcelasStart) throw new Error("Células de parcelas não configuradas.");
+      
+      await addInstallmentToSheet(restNum, nome.trim(), valorNum);
+      // Adiciona no histórico local para manter a data de adição
+      await addDespesa({ nome: nome.trim(), valor: valorNum * restNum, data: new Date().toISOString() });
+      
+      showSuccessAndClose();
+    } catch (e: any) {
+      setErro(e.message ?? "Erro ao adicionar parcela.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <KeyboardAvoidingView
+        behavior="padding"
+        style={styles.overlay}
+      >
+        <View style={styles.card}>
+
+          {success && (
+            <Animated.View style={[styles.successOverlay, { opacity: opacityAnim }]}>
+              <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+                <View style={styles.checkCircle}>
+                  <Ionicons name="checkmark" size={56} color="#fff" />
+                </View>
+              </Animated.View>
+              <Animated.Text style={[styles.successText, { opacity: opacityAnim }]}>
+                Parcela adicionada!
+              </Animated.Text>
+            </Animated.View>
+          )}
+
+          <Text style={styles.title}>Nova Parcela</Text>
+
+          <Text style={styles.label}>Produto</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Ex: Celular"
+            placeholderTextColor="#555"
+            value={nome}
+            onChangeText={setNome}
+            editable={!loading && !success}
+          />
+
+          <View style={styles.row}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+              <Text style={styles.label}>Parcelas</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: 12"
+                placeholderTextColor="#555"
+                value={restantes}
+                onChangeText={setRestantes}
+                keyboardType="number-pad"
+                editable={!loading && !success}
+              />
+            </View>
+            <View style={{ flex: 1, marginLeft: 10 }}>
+              <Text style={styles.label}>Valor (R$)</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="Ex: 150,00"
+                placeholderTextColor="#555"
+                value={valor}
+                onChangeText={setValor}
+                keyboardType="decimal-pad"
+                editable={!loading && !success}
+              />
+            </View>
+          </View>
+
+          {!!erro && <Text style={styles.erro}>{erro}</Text>}
+
+          <TouchableOpacity
+            style={[styles.btnAdd, (loading || success) && styles.btnDisabled]}
+            onPress={handleAdicionar}
+            disabled={loading || success}
+            activeOpacity={0.8}
+          >
+            {loading ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Adicionar</Text>}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.btnCancel}
+            onPress={onClose}
+            disabled={loading || success}
+          >
+            <Text style={styles.btnCancelText}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.7)",
+    justifyContent: "flex-end",
+  },
+  card: {
+    backgroundColor: "#161b22",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 28,
+    paddingBottom: 40,
+    borderTopWidth: 1,
+    borderColor: "#30363d",
+    overflow: "hidden",
+  },
+  successOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#161b22",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  checkCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: "#238636",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#3fb950",
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
+    elevation: 10,
+  },
+  successText: {
+    color: "#3fb950",
+    fontSize: 20,
+    fontWeight: "700",
+    marginTop: 20,
+    letterSpacing: 0.3,
+  },
+  title: {
+    color: "#e6edf3",
+    fontSize: 22,
+    fontWeight: "700",
+    marginBottom: 24,
+    textAlign: "center",
+  },
+  label: {
+    color: "#8b949e",
+    fontSize: 13,
+    marginBottom: 6,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  input: {
+    backgroundColor: "#0d1117",
+    color: "#e6edf3",
+    borderWidth: 1,
+    borderColor: "#30363d",
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    fontSize: 17,
+    marginBottom: 18,
+  },
+  row: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+  },
+  erro: {
+    color: "#f85149",
+    fontSize: 13,
+    marginBottom: 12,
+    textAlign: "center",
+  },
+  btnAdd: {
+    backgroundColor: "#238636",
+    borderRadius: 12,
+    paddingVertical: 15,
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  btnDisabled: { opacity: 0.6 },
+  btnText:     { color: "#fff", fontSize: 16, fontWeight: "700" },
+  btnCancel:   { alignItems: "center", paddingVertical: 12 },
+  btnCancelText: { color: "#8b949e", fontSize: 15 },
+});

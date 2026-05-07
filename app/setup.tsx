@@ -11,13 +11,18 @@ export default function SetupScreen() {
   const router = useRouter();
   const [cellSaldo, setCellSaldo] = useState("F9");
   const [cellGasto, setCellGasto] = useState("I8");
+  const [cellParcelasStart, setCellParcelasStart] = useState("");
   const [loading,   setLoading]   = useState(false);
   const [scriptUrl, setScriptUrl] = useState("");
 
   // Pré-preenche se já existir configuração
   useEffect(() => {
     getCellConfig().then((c) => {
-      if (c) { setCellSaldo(c.cellSaldo); setCellGasto(c.cellGasto); }
+      if (c) { 
+        setCellSaldo(c.cellSaldo); 
+        setCellGasto(c.cellGasto); 
+        if (c.cellParcelasStart) setCellParcelasStart(c.cellParcelasStart);
+      }
     });
     getScriptUrl().then((u) => setScriptUrl(u ?? ""));
   }, []);
@@ -32,7 +37,7 @@ export default function SetupScreen() {
     setLoading(true);
     try {
       const valor = await getSaldo(saldo);
-      await saveCellConfig({ cellSaldo: saldo, cellGasto: gasto });
+      await saveCellConfig({ cellSaldo: saldo, cellGasto: gasto, cellParcelasStart: cellParcelasStart.trim().toUpperCase() || undefined });
       Alert.alert(
         "Configurado! ✅",
         `Saldo atual lido: R$ ${valor.toFixed(2).replace(".", ",")}`,
@@ -109,6 +114,20 @@ export default function SetupScreen() {
             value={cellGasto}
             onChangeText={setCellGasto}
             placeholder="ex: I8"
+            placeholderTextColor="#484f58"
+            autoCapitalize="characters"
+            autoCorrect={false}
+          />
+          
+          <View style={styles.divider} />
+
+          <Text style={styles.label}>Célula de Parcelas (Opcional)</Text>
+          <Text style={styles.hint}>1ª célula da coluna "Restantes" (ex: K5)</Text>
+          <TextInput
+            style={styles.input}
+            value={cellParcelasStart}
+            onChangeText={setCellParcelasStart}
+            placeholder="ex: K5"
             placeholderTextColor="#484f58"
             autoCapitalize="characters"
             autoCorrect={false}

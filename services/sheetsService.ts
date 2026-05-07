@@ -67,6 +67,7 @@ export async function pingScript(scriptUrl: string, spreadsheetId: string): Prom
 export interface CellConfig {
   cellSaldo: string; // ex: "F9"
   cellGasto: string; // ex: "I8"
+  cellParcelasStart?: string; // ex: "K5"
 }
 
 export async function saveCellConfig(config: CellConfig): Promise<void> {
@@ -146,6 +147,91 @@ export async function subtractExpense(
   const novoSaldo = parseFloat(String(data.novoSaldo).replace(",", "."));
   if (isNaN(novoSaldo)) throw new Error(`Saldo inválido recebido: "${data.novoSaldo}"`);
   return novoSaldo;
+}
+
+// ── Parcelas ───────────────────────────────────────────────────────────────
+
+export interface Installment {
+  rowIndex: number;
+  restantes: number;
+  nome: string;
+  valor: number;
+}
+
+export async function getInstallments(): Promise<Installment[]> {
+  const { url, spreadsheetId } = await getCredentials();
+  const config = await getCellConfig();
+  if (!config || !config.cellParcelasStart) return [];
+  const data = await safeFetch(
+    `${url}?action=getInstallments&spreadsheetId=${encodeURIComponent(spreadsheetId)}&cellParcelasStart=${encodeURIComponent(config.cellParcelasStart)}`
+  );
+  return data.installments || [];
+}
+
+export async function addInstallmentToSheet(restantes: number, nome: string, valor: number): Promise<void> {
+  const { url, spreadsheetId } = await getCredentials();
+  const config = await getCellConfig();
+  if (!config || !config.cellParcelasStart) throw new Error("Células de parcelas não configuradas.");
+  await safeFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "addInstallment",
+      spreadsheetId,
+      cellParcelasStart: config.cellParcelasStart,
+      restantes,
+      nome,
+      valor
+    }),
+  });
+}
+
+export async function payInstallment(rowIndex: number): Promise<number> {
+  const { url, spreadsheetId } = await getCredentials();
+  const config = await getCellConfig();
+  if (!config || !config.cellParcelasStart) throw new Error("Células de parcelas não configuradas.");
+  const data = await safeFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "payInstallment",
+      spreadsheetId,
+      cellParcelasStart: config.cellParcelasStart,
+      rowIndex
+    }),
+  });
+  return data.remaining;
+}
+
+export async function payAllInstallments(): Promise<void> {
+  const { url, spreadsheetId } = await getCredentials();
+  const config = await getCellConfig();
+  if (!config || !config.cellParcelasStart) throw new Error("Células de parcelas não configuradas.");
+  await safeFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "payAllInstallments",
+      spreadsheetId,
+      cellParcelasStart: config.cellParcelasStart
+    }),
+  });
+}
+
+export async function deleteInstallment(rowIndex: number): Promise<void> {
+  const { url, spreadsheetId } = await getCredentials();
+  const config = await getCellConfig();
+  if (!config || !config.cellParcelasStart) throw new Error("Células de parcelas não configuradas.");
+  await safeFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "deleteInstallment",
+      spreadsheetId,
+      cellParcelasStart: config.cellParcelasStart,
+      rowIndex
+    }),
+  });
 }
 
 // ── Histórico local ────────────────────────────────────────────────────────

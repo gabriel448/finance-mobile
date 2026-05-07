@@ -75,6 +75,7 @@ export default function RootLayout() {
   const navItems = [
     { label: "Início",        icon: "home-outline"     as const, route: "/"         },
     { label: "Histórico",     icon: "time-outline"     as const, route: "/history"  },
+    { label: "Parcelas",      icon: "card-outline"     as const, route: "/installments" },
     { label: "Configurações", icon: "settings-outline" as const, route: "/settings" },
   ];
 
@@ -104,6 +105,7 @@ export default function RootLayout() {
         <Stack.Screen name="setup"       options={{ title: "Configurar células", headerLeft: () => null }} />
         <Stack.Screen name="index"       options={{ title: "Finanças" }} />
         <Stack.Screen name="history"     options={{ title: "Histórico" }} />
+        <Stack.Screen name="installments" options={{ title: "Parcelas" }} />
         <Stack.Screen name="settings"    options={{ title: "Configurações" }} />
       </Stack>
 
