@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 12,
-    paddingBottom: 96,
+    paddingBottom: 120,
   },
   item: {
     flexDirection: "row",
@@ -408,7 +408,7 @@ const styles = StyleSheet.create({
   },
   fab: {
     position: "absolute",
-    bottom: 28,
+    bottom: 60,
     right: 24,
     width: 56,
     height: 56,

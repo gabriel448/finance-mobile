@@ -228,7 +228,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 12,
-    paddingBottom: 96, // espaço para o FAB não cobrir o último item
+    paddingBottom: 120, // espaço para o FAB não cobrir o último item
   },
   item: {
     flexDirection: "row",
@@ -305,7 +305,7 @@ const styles = StyleSheet.create({
   // ── FAB ────────────────────────────────────────────────────────────────────
   fab: {
     position: "absolute",
-    bottom: 28,
+    bottom: 60,
     right: 24,
     width: 56,
     height: 56,
