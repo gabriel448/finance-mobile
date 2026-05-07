@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { addInstallmentToSheet, getCellConfig } from "../services/sheetsService";
-import { addDespesa } from "../services/localStorage";
+import { addInstallmentMetadata } from "../services/localStorage";
 import { useAudioPlayer } from "expo-audio";
 
 interface Props {
@@ -88,8 +88,8 @@ export default function AddInstallmentModal({ visible, onClose, onSuccess }: Pro
       if (!config || !config.cellParcelasStart) throw new Error("Células de parcelas não configuradas.");
       
       await addInstallmentToSheet(restNum, nome.trim(), valorNum);
-      // Adiciona no histórico local para manter a data de adição
-      await addDespesa({ nome: nome.trim(), valor: valorNum * restNum, data: new Date().toISOString() });
+      // Adiciona no histórico específico de parcelas para manter a data
+      await addInstallmentMetadata(nome.trim(), new Date().toISOString());
       
       showSuccessAndClose();
     } catch (e: any) {

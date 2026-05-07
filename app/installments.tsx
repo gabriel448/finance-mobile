@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useRef } from "react";
 import {
   View,
   Text,
@@ -8,12 +8,15 @@ import {
   StatusBar,
   RefreshControl,
   ActivityIndicator,
+  Modal,
+  Animated,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { getInstallments, Installment, payInstallment, payAllInstallments, deleteInstallment, getCellConfig } from "../services/sheetsService";
 import { Ionicons } from "@expo/vector-icons";
 import InstallmentDetailModal from "../components/InstallmentDetailModal";
 import AddInstallmentModal from "../components/AddInstallmentModal";
+import { useAudioPlayer } from "expo-audio";
 
 function formatValor(valor: number): string {
   return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -30,6 +33,12 @@ export default function InstallmentsScreen() {
   const [detailVisible, setDetailVisible] = useState(false);
   const [addVisible, setAddVisible] = useState(false);
   const [payingAll, setPayingAll] = useState(false);
+  
+  const [confirmAllVisible, setConfirmAllVisible] = useState(false);
+  const [successAllVisible, setSuccessAllVisible] = useState(false);
+  const scaleAnim   = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const playerCheck = useAudioPlayer(require("../assets/check.mp3"));
 
   async function checkConfigAndLoad() {
     setLoading(true);
@@ -70,11 +79,32 @@ export default function InstallmentsScreen() {
     setDetailVisible(true);
   }
 
-  async function handlePayAll() {
+  async function executePayAll() {
     setPayingAll(true);
     try {
       await payAllInstallments();
       await carregarParcelas();
+      
+      setConfirmAllVisible(false);
+      setSuccessAllVisible(true);
+      
+      try {
+        playerCheck.volume = 1.0;
+        playerCheck.seekTo(0);
+        playerCheck.play();
+      } catch {}
+
+      Animated.parallel([
+        Animated.spring(scaleAnim, { toValue: 1, useNativeDriver: true, bounciness: 18, speed: 14 }),
+        Animated.timing(opacityAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+      ]).start();
+
+      setTimeout(() => {
+        setSuccessAllVisible(false);
+        scaleAnim.setValue(0);
+        opacityAnim.setValue(0);
+      }, 1500);
+
     } catch (e) {
       console.log(e);
     } finally {
@@ -154,7 +184,7 @@ export default function InstallmentsScreen() {
             <Text style={styles.summaryText}>{installments.length} item(s) parcelado(s)</Text>
             <TouchableOpacity
               style={styles.btnPayAll}
-              onPress={handlePayAll}
+              onPress={() => setConfirmAllVisible(true)}
               disabled={payingAll}
               activeOpacity={0.7}
             >
@@ -215,6 +245,46 @@ export default function InstallmentsScreen() {
         onClose={() => setAddVisible(false)}
         onSuccess={() => carregarParcelas()}
       />
+
+      <Modal visible={confirmAllVisible} transparent animationType="fade" onRequestClose={() => setConfirmAllVisible(false)}>
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmCard}>
+            <View style={styles.confirmIconCircle}>
+              <Ionicons name="help-outline" size={36} color="#58a6ff" />
+            </View>
+            <Text style={styles.confirmTitle}>Pagar Todas?</Text>
+            <Text style={styles.confirmSubtitle}>
+              Pagar 1 parcela de {installments.length} itens?
+            </Text>
+
+            <TouchableOpacity style={styles.btnConfirm} onPress={executePayAll} activeOpacity={0.8} disabled={payingAll}>
+              {payingAll ? <ActivityIndicator color="#fff" /> : (
+                <>
+                  <Ionicons name="checkmark-outline" size={18} color="#fff" />
+                  <Text style={styles.btnConfirmText}>Confirmar</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.btnCancelar} onPress={() => setConfirmAllVisible(false)} activeOpacity={0.8} disabled={payingAll}>
+              <Text style={styles.btnCancelarText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {successAllVisible && (
+        <Animated.View style={[styles.successOverlay, { opacity: opacityAnim }]}>
+          <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+            <View style={styles.checkCircle}>
+              <Ionicons name="checkmark" size={56} color="#fff" />
+            </View>
+          </Animated.View>
+          <Animated.Text style={[styles.successText, { opacity: opacityAnim }]}>
+            {installments.length} itens atualizados!
+          </Animated.Text>
+        </Animated.View>
+      )}
     </View>
   );
 }
@@ -350,5 +420,41 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4,
     shadowRadius: 12,
     elevation: 8,
+  },
+  confirmOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "center", alignItems: "center", paddingHorizontal: 28,
+  },
+  confirmCard: {
+    backgroundColor: "#161b22", borderRadius: 20, width: "100%", padding: 28, alignItems: "center", borderWidth: 1, borderColor: "#30363d",
+  },
+  confirmIconCircle: {
+    width: 72, height: 72, borderRadius: 36, backgroundColor: "#0d1117", alignItems: "center", justifyContent: "center", marginBottom: 20, borderWidth: 1, borderColor: "#58a6ff40",
+  },
+  confirmTitle: {
+    color: "#e6edf3", fontSize: 20, fontWeight: "700", marginBottom: 10, textAlign: "center",
+  },
+  confirmSubtitle: {
+    color: "#8b949e", fontSize: 15, textAlign: "center", marginBottom: 28,
+  },
+  btnConfirm: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", backgroundColor: "#238636", borderRadius: 12, paddingVertical: 15, marginBottom: 10,
+  },
+  btnConfirmText: {
+    color: "#fff", fontSize: 16, fontWeight: "700",
+  },
+  btnCancelar: {
+    width: "100%", alignItems: "center", paddingVertical: 14, borderRadius: 12, backgroundColor: "#21262d", borderWidth: 1, borderColor: "#30363d",
+  },
+  btnCancelarText: {
+    color: "#8b949e", fontSize: 15, fontWeight: "600",
+  },
+  successOverlay: {
+    ...StyleSheet.absoluteFillObject, backgroundColor: "#161b22", alignItems: "center", justifyContent: "center", zIndex: 100,
+  },
+  checkCircle: {
+    width: 96, height: 96, borderRadius: 48, backgroundColor: "#238636", alignItems: "center", justifyContent: "center", shadowColor: "#3fb950", shadowOpacity: 0.5, shadowRadius: 24, elevation: 10,
+  },
+  successText: {
+    color: "#3fb950", fontSize: 20, fontWeight: "700", marginTop: 20, letterSpacing: 0.3,
   },
 });

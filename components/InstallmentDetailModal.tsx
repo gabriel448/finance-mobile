@@ -11,7 +11,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useAudioPlayer } from "expo-audio";
 import { Installment } from "../services/sheetsService";
-import { getDespesas } from "../services/localStorage";
+import { getInstallmentMetadata } from "../services/localStorage";
 
 interface Props {
   visible: boolean;
@@ -56,10 +56,9 @@ export default function InstallmentDetailModal({ visible, installment, onClose, 
       scaleAnim.setValue(0);
       opacityAnim.setValue(0);
       
-      getDespesas().then(historico => {
-        const found = historico.find(d => d.nome === installment.nome);
-        if (found) {
-          setDataAdicao(found.data);
+      getInstallmentMetadata(installment.nome).then(data => {
+        if (data) {
+          setDataAdicao(data);
         } else {
           setDataAdicao("");
         }

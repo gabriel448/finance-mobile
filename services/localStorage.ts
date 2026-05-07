@@ -106,3 +106,29 @@ export async function removeDespesa(id: string): Promise<void> {
 export async function clearDespesas() {
   await AsyncStorage.removeItem(HIST_KEY);
 }
+
+// ── Datas de Parcelas ──────────────────────────────────────────────────────
+
+export interface InstallmentMetadata {
+  nome: string;
+  data: string; // ISO
+}
+
+const HIST_PARCELAS_KEY = "historico_parcelas";
+
+export async function addInstallmentMetadata(nome: string, data: string) {
+  const raw = await AsyncStorage.getItem(HIST_PARCELAS_KEY);
+  const lista: InstallmentMetadata[] = raw ? JSON.parse(raw) : [];
+  // Remove o existente se houver para não duplicar, atualizando a data
+  const filtrada = lista.filter(d => d.nome !== nome);
+  filtrada.push({ nome, data });
+  await AsyncStorage.setItem(HIST_PARCELAS_KEY, JSON.stringify(filtrada));
+}
+
+export async function getInstallmentMetadata(nome: string): Promise<string | null> {
+  const raw = await AsyncStorage.getItem(HIST_PARCELAS_KEY);
+  if (!raw) return null;
+  const lista: InstallmentMetadata[] = JSON.parse(raw);
+  const found = lista.find(d => d.nome === nome);
+  return found ? found.data : null;
+}

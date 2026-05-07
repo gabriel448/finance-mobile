@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
+  ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -14,6 +14,7 @@ export default function SetupScreen() {
   const [cellParcelasStart, setCellParcelasStart] = useState("");
   const [loading,   setLoading]   = useState(false);
   const [scriptUrl, setScriptUrl] = useState("");
+  const [infoVisible, setInfoVisible] = useState(false);
 
   // Pré-preenche se já existir configuração
   useEffect(() => {
@@ -121,7 +122,12 @@ export default function SetupScreen() {
           
           <View style={styles.divider} />
 
-          <Text style={styles.label}>Célula de Parcelas (Opcional)</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4, gap: 6 }}>
+            <Text style={[styles.label, { marginBottom: 0 }]}>Célula de Parcelas (Opcional)</Text>
+            <TouchableOpacity onPress={() => setInfoVisible(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="information-circle-outline" size={18} color="#58a6ff" />
+            </TouchableOpacity>
+          </View>
           <Text style={styles.hint}>1ª célula da coluna "Restantes" (ex: K5)</Text>
           <TextInput
             style={styles.input}
@@ -149,6 +155,32 @@ export default function SetupScreen() {
         <Text style={styles.footer}>
           O app vai ler o saldo de {cellSaldo || "?"} e somar gastos em {cellGasto || "?"}
         </Text>
+
+        <Modal visible={infoVisible} transparent animationType="fade" onRequestClose={() => setInfoVisible(false)}>
+          <View style={styles.infoOverlay}>
+            <View style={styles.infoCard}>
+              <View style={styles.infoIconCircle}>
+                <Ionicons name="information" size={32} color="#58a6ff" />
+              </View>
+              <Text style={styles.infoTitle}>Como organizar a planilha</Text>
+              <Text style={styles.infoText}>
+                Para que a aba de Parcelas funcione corretamente, a sua planilha precisa ter 3 colunas vizinhas para as parcelas, nesta exata ordem:
+              </Text>
+              <View style={styles.infoList}>
+                <Text style={styles.infoListItem}><Text style={{fontWeight: 'bold', color: '#e6edf3'}}>1ª Coluna (Ex: K):</Text> Restantes</Text>
+                <Text style={styles.infoListItem}><Text style={{fontWeight: 'bold', color: '#e6edf3'}}>2ª Coluna (Ex: L):</Text> Produto</Text>
+                <Text style={styles.infoListItem}><Text style={{fontWeight: 'bold', color: '#e6edf3'}}>3ª Coluna (Ex: M):</Text> Valor</Text>
+              </View>
+              <Text style={styles.infoText}>
+                A célula que você deve configurar aqui (ex: K5) é exatamente a <Text style={{fontWeight: 'bold', color: '#e6edf3'}}>primeira linha da primeira coluna</Text> (Parcelas Restantes). O app se encarregará de ler os itens vizinhos automaticamente!
+              </Text>
+
+              <TouchableOpacity style={styles.btnInfoClose} onPress={() => setInfoVisible(false)} activeOpacity={0.8}>
+                <Text style={styles.btnInfoCloseText}>Entendi</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -188,4 +220,13 @@ const styles = StyleSheet.create({
   },
   btnText: { color: "#fff", fontSize: 16, fontWeight: "700" },
   footer:  { color: "#484f58", fontSize: 12, textAlign: "center", marginTop: 20 },
+  infoOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.8)", justifyContent: "center", alignItems: "center", paddingHorizontal: 28 },
+  infoCard: { backgroundColor: "#161b22", borderRadius: 20, width: "100%", padding: 28, borderWidth: 1, borderColor: "#30363d" },
+  infoIconCircle: { width: 64, height: 64, borderRadius: 32, backgroundColor: "#0d1117", alignItems: "center", justifyContent: "center", marginBottom: 20, borderWidth: 1, borderColor: "#58a6ff40", alignSelf: "center" },
+  infoTitle: { color: "#e6edf3", fontSize: 20, fontWeight: "700", marginBottom: 16, textAlign: "center" },
+  infoText: { color: "#8b949e", fontSize: 14, lineHeight: 22, marginBottom: 16, textAlign: "center" },
+  infoList: { backgroundColor: "#0d1117", padding: 16, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: "#30363d" },
+  infoListItem: { color: "#8b949e", fontSize: 14, marginBottom: 8 },
+  btnInfoClose: { backgroundColor: "#1f6feb", borderRadius: 12, paddingVertical: 14, alignItems: "center", marginTop: 8 },
+  btnInfoCloseText: { color: "#fff", fontSize: 16, fontWeight: "700" },
 });
