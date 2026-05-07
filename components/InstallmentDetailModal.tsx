@@ -40,6 +40,7 @@ export default function InstallmentDetailModal({ visible, installment, onClose, 
   const [successMsg, setSuccessMsg] = useState("");
   const [erro, setErro]         = useState("");
   const [dataAdicao, setDataAdicao] = useState("");
+  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
 
   const scaleAnim   = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -53,6 +54,7 @@ export default function InstallmentDetailModal({ visible, installment, onClose, 
       setLoading(false);
       setSuccess(false);
       setErro("");
+      setConfirmDeleteVisible(false);
       scaleAnim.setValue(0);
       opacityAnim.setValue(0);
       
@@ -116,8 +118,9 @@ export default function InstallmentDetailModal({ visible, installment, onClose, 
     }
   }
 
-  async function handleDelete() {
+  async function executeDelete() {
     if (!installment) return;
+    setConfirmDeleteVisible(false);
     setErro("");
     setLoading(true);
     try {
@@ -128,6 +131,10 @@ export default function InstallmentDetailModal({ visible, installment, onClose, 
     } finally {
       setLoading(false);
     }
+  }
+
+  async function handleDelete() {
+    setConfirmDeleteVisible(true);
   }
 
   if (!installment) return null;
@@ -219,6 +226,34 @@ export default function InstallmentDetailModal({ visible, installment, onClose, 
             <Text style={styles.btnVoltarText}>Voltar</Text>
           </TouchableOpacity>
         </View>
+
+        {/* ── Modal de Confirmação de Exclusão ── */}
+        <Modal visible={confirmDeleteVisible} transparent animationType="fade" onRequestClose={() => setConfirmDeleteVisible(false)}>
+          <View style={styles.confirmOverlay}>
+            <View style={styles.confirmCard}>
+              <View style={styles.confirmIconCircle}>
+                <Ionicons name="trash-outline" size={36} color="#f85149" />
+              </View>
+              <Text style={styles.confirmTitle}>Apagar Produto?</Text>
+              <Text style={styles.confirmSubtitle}>
+                Deseja apagar o produto {installment.nome}?
+              </Text>
+
+              <TouchableOpacity style={styles.btnConfirmDelete} onPress={executeDelete} activeOpacity={0.8} disabled={loading}>
+                {loading ? <ActivityIndicator color="#fff" /> : (
+                  <>
+                    <Ionicons name="trash-outline" size={18} color="#fff" />
+                    <Text style={styles.btnConfirmDeleteText}>Apagar</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.btnCancelarConfirm} onPress={() => setConfirmDeleteVisible(false)} activeOpacity={0.8} disabled={loading}>
+                <Text style={styles.btnCancelarConfirmText}>Cancelar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
       </View>
     </Modal>
   );
@@ -373,5 +408,33 @@ const styles = StyleSheet.create({
     color: "#e6edf3",
     fontSize: 16,
     fontWeight: "600",
+  },
+  // ── Confirmação ──
+  confirmOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.85)", justifyContent: "center", alignItems: "center", paddingHorizontal: 28,
+  },
+  confirmCard: {
+    backgroundColor: "#161b22", borderRadius: 20, width: "100%", padding: 28, alignItems: "center", borderWidth: 1, borderColor: "#30363d",
+  },
+  confirmIconCircle: {
+    width: 72, height: 72, borderRadius: 36, backgroundColor: "#0d1117", alignItems: "center", justifyContent: "center", marginBottom: 20, borderWidth: 1, borderColor: "#f8514940",
+  },
+  confirmTitle: {
+    color: "#e6edf3", fontSize: 20, fontWeight: "700", marginBottom: 10, textAlign: "center",
+  },
+  confirmSubtitle: {
+    color: "#8b949e", fontSize: 15, textAlign: "center", marginBottom: 28,
+  },
+  btnConfirmDelete: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", backgroundColor: "#b91c1c", borderRadius: 12, paddingVertical: 15, marginBottom: 10,
+  },
+  btnConfirmDeleteText: {
+    color: "#fff", fontSize: 16, fontWeight: "700",
+  },
+  btnCancelarConfirm: {
+    width: "100%", alignItems: "center", paddingVertical: 14, borderRadius: 12, backgroundColor: "#21262d", borderWidth: 1, borderColor: "#30363d",
+  },
+  btnCancelarConfirmText: {
+    color: "#8b949e", fontSize: 15, fontWeight: "600",
   },
 });
