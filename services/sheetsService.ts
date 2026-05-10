@@ -234,7 +234,7 @@ export async function deleteInstallment(rowIndex: number): Promise<void> {
   });
 }
 
-// ── Histórico local ────────────────────────────────────────────────────────
+// ── Histórico (local + backup na planilha) ─────────────────────────────────
 
 export interface Despesa {
   id: string;
@@ -243,18 +243,51 @@ export interface Despesa {
   data: string;
 }
 
+async function syncHistoricoToSheet(lista: Despesa[]): Promise<void> {
+  try {
+    const { url, spreadsheetId } = await getCredentials();
+    await safeFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "syncHistorico", spreadsheetId, historico: lista }),
+    });
+  } catch {
+    // silencioso — local é o primário, planilha é o backup
+  }
+}
+
+async function fetchHistoricoFromSheet(): Promise<Despesa[]> {
+  try {
+    const { url, spreadsheetId } = await getCredentials();
+    const data = await safeFetch(
+      `${url}?action=getHistorico&spreadsheetId=${encodeURIComponent(spreadsheetId)}`
+    );
+    return data.historico ?? [];
+  } catch {
+    return [];
+  }
+}
+
 export async function addDespesa(despesa: Omit<Despesa, "id">): Promise<Despesa> {
   const raw   = await AsyncStorage.getItem(HIST_KEY);
   const lista: Despesa[] = raw ? JSON.parse(raw) : [];
   const nova: Despesa    = { ...despesa, id: Date.now().toString() };
   lista.unshift(nova);
   await AsyncStorage.setItem(HIST_KEY, JSON.stringify(lista));
+  syncHistoricoToSheet(lista);
   return nova;
 }
 
 export async function getDespesas(): Promise<Despesa[]> {
   const raw = await AsyncStorage.getItem(HIST_KEY);
-  return raw ? JSON.parse(raw) : [];
+  if (raw) return JSON.parse(raw);
+
+  // Local vazio (ex: após reinstalação) — restaura do backup na planilha
+  const fromSheet = await fetchHistoricoFromSheet();
+  if (fromSheet.length > 0) {
+    await AsyncStorage.setItem(HIST_KEY, JSON.stringify(fromSheet));
+  }
+  return fromSheet;
 }
 
 export async function removeDespesa(id: string): Promise<void> {
@@ -262,8 +295,10 @@ export async function removeDespesa(id: string): Promise<void> {
   const lista: Despesa[] = raw ? JSON.parse(raw) : [];
   const nova  = lista.filter((d) => d.id !== id);
   await AsyncStorage.setItem(HIST_KEY, JSON.stringify(nova));
+  syncHistoricoToSheet(nova);
 }
 
 export async function clearDespesas(): Promise<void> {
   await AsyncStorage.removeItem(HIST_KEY);
+  syncHistoricoToSheet([]);
 }

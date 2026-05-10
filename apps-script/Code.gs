@@ -72,6 +72,24 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (action === "getHistorico") {
+      if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ss.getSheetByName("Historico");
+      if (!sheet || sheet.getLastRow() < 2) {
+        return ContentService
+          .createTextOutput(JSON.stringify({ historico: [] }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
+      var historico = rows.map(function(r) {
+        return { id: String(r[0]), nome: String(r[1]), valor: Number(r[2]), data: String(r[3]) };
+      });
+      return ContentService
+        .createTextOutput(JSON.stringify({ historico: historico }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     return ContentService
       .createTextOutput(JSON.stringify({ error: "Ação desconhecida: " + action }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -208,6 +226,22 @@ function doPost(e) {
       
       dataRange.setValues(data);
       
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "syncHistorico") {
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ss.getSheetByName("Historico");
+      if (!sheet) sheet = ss.insertSheet("Historico");
+      sheet.clearContents();
+      sheet.appendRow(["id", "nome", "valor", "data"]);
+      var historico = body.historico || [];
+      if (historico.length > 0) {
+        var rows = historico.map(function(d) { return [d.id, d.nome, d.valor, d.data]; });
+        sheet.getRange(2, 1, rows.length, 4).setValues(rows);
+      }
       return ContentService
         .createTextOutput(JSON.stringify({ ok: true }))
         .setMimeType(ContentService.MimeType.JSON);
