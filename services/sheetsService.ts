@@ -65,9 +65,12 @@ export async function pingScript(scriptUrl: string, spreadsheetId: string): Prom
 // ── Configuração das células ───────────────────────────────────────────────
 
 export interface CellConfig {
-  cellSaldo: string; // ex: "F9"
-  cellGasto: string; // ex: "I8"
+  cellSaldo: string;          // ex: "F9"
+  cellGasto: string;          // ex: "I8"
   cellParcelasStart?: string; // ex: "K5"
+  cellCustoFixo?: string;     // ex: "D20" — total de custos fixos
+  cellSalario?: string;       // ex: "B2"  — salário/capital (recomendado)
+  salarioManual?: number;     // fallback se não usar célula
 }
 
 export async function saveCellConfig(config: CellConfig): Promise<void> {
@@ -105,6 +108,11 @@ async function safeFetch(url: string, options?: RequestInit): Promise<any> {
 }
 
 // ── Chamadas ao Apps Script ────────────────────────────────────────────────
+
+// Lê qualquer célula numérica da planilha reutilizando a action getSaldo
+export async function readCellAsNumber(cell: string): Promise<number> {
+  return getSaldo(cell);
+}
 
 export async function getSaldo(cellSaldo: string): Promise<number> {
   const { url, spreadsheetId } = await getCredentials();

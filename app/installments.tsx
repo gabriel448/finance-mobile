@@ -10,9 +10,11 @@ import {
   ActivityIndicator,
   Modal,
   Animated,
+  Vibration,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { getInstallments, Installment, payInstallment, payAllInstallments, deleteInstallment, getCellConfig } from "../services/sheetsService";
+import { getPaidInstallments, togglePaidInstallment, markInstallmentPaid, markAllInstallmentsPaid } from "../services/localStorage";
 import { Ionicons } from "@expo/vector-icons";
 import InstallmentDetailModal from "../components/InstallmentDetailModal";
 import AddInstallmentModal from "../components/AddInstallmentModal";
@@ -34,6 +36,7 @@ export default function InstallmentsScreen() {
   const [addVisible, setAddVisible] = useState(false);
   const [payingAll, setPayingAll] = useState(false);
   
+  const [paidNomes, setPaidNomes] = useState<Set<string>>(new Set());
   const [confirmAllVisible, setConfirmAllVisible] = useState(false);
   const [successAllVisible, setSuccessAllVisible] = useState(false);
   const scaleAnim   = useRef(new Animated.Value(0)).current;
@@ -49,7 +52,11 @@ export default function InstallmentsScreen() {
       return;
     }
     setIsConfigured(true);
-    await carregarParcelas();
+    const [, paid] = await Promise.all([
+      carregarParcelas(),
+      getPaidInstallments(),
+    ]) as [void, string[]];
+    setPaidNomes(new Set(paid));
     setLoading(false);
   }
 
@@ -79,12 +86,25 @@ export default function InstallmentsScreen() {
     setDetailVisible(true);
   }
 
+  async function handleLongPress(item: Installment) {
+    const nowPaid = await togglePaidInstallment(item.nome);
+    if (nowPaid) Vibration.vibrate([0, 40, 60, 40]);
+    setPaidNomes((prev) => {
+      const next = new Set(prev);
+      if (nowPaid) next.add(item.nome);
+      else next.delete(item.nome);
+      return next;
+    });
+  }
+
   async function executePayAll() {
     setPayingAll(true);
     try {
       await payAllInstallments();
+      await markAllInstallmentsPaid(installments.map((i) => i.nome));
+      setPaidNomes(new Set(installments.map((i) => i.nome)));
       await carregarParcelas();
-      
+
       setConfirmAllVisible(false);
       setSuccessAllVisible(true);
       
@@ -143,24 +163,35 @@ export default function InstallmentsScreen() {
     );
   }
 
-  function renderItem({ item, index }: { item: Installment; index: number }) {
+  function renderItem({ item }: { item: Installment }) {
+    const paid = paidNomes.has(item.nome);
     return (
       <TouchableOpacity
-        style={styles.item}
+        style={[styles.item, paid && styles.itemPaid]}
         onPress={() => handlePress(item)}
+        onLongPress={() => handleLongPress(item)}
+        delayLongPress={400}
         activeOpacity={0.7}
       >
+        <View style={[styles.itemBadge, paid && styles.itemBadgePaid]}>
+          {paid
+            ? <Ionicons name="checkmark" size={18} color="#3fb950" />
+            : <Text style={styles.itemRestantes}>{item.restantes}x</Text>
+          }
+        </View>
         <View style={styles.itemLeft}>
-          <View style={styles.itemBadge}>
-            <Text style={styles.itemRestantes}>{item.restantes}x</Text>
-          </View>
-          <View>
-            <Text style={styles.itemNome} numberOfLines={1}>{item.nome}</Text>
-          </View>
+          <Text style={[styles.itemNome, paid && styles.itemNomePaid]} numberOfLines={1}>
+            {item.nome}
+          </Text>
+          {paid && (
+            <Text style={styles.itemPaidLabel}>Paga</Text>
+          )}
         </View>
         <View style={styles.itemRight}>
-          <Text style={styles.itemValor}>{formatValor(item.valor)}</Text>
-          <Ionicons name="chevron-forward-outline" size={16} color="#484f58" />
+          <Text style={[styles.itemValor, paid && styles.itemValorPaid]}>
+            {formatValor(item.valor)}
+          </Text>
+          <Ionicons name="chevron-forward-outline" size={16} color={paid ? "#3fb95040" : "#484f58"} />
         </View>
       </TouchableOpacity>
     );
@@ -231,6 +262,8 @@ export default function InstallmentsScreen() {
         onClose={() => setDetailVisible(false)}
         onPay={async (inst) => {
           const res = await payInstallment(inst.rowIndex);
+          await markInstallmentPaid(inst.nome);
+          setPaidNomes((prev) => new Set([...prev, inst.nome]));
           carregarParcelas();
           return res;
         }}
@@ -327,8 +360,8 @@ const styles = StyleSheet.create({
   },
   item: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    gap: 12,
     backgroundColor: "#161b22",
     borderRadius: 12,
     paddingHorizontal: 14,
@@ -336,10 +369,11 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#21262d",
   },
+  itemPaid: {
+    backgroundColor: "rgba(63,185,80,0.05)",
+    borderColor: "rgba(63,185,80,0.25)",
+  },
   itemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
     flex: 1,
   },
   itemBadge: {
@@ -350,6 +384,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  itemBadgePaid: {
+    backgroundColor: "rgba(63,185,80,0.12)",
+    borderWidth: 1,
+    borderColor: "rgba(63,185,80,0.3)",
+  },
   itemRestantes: {
     color: "#3fb950",
     fontSize: 14,
@@ -359,7 +398,17 @@ const styles = StyleSheet.create({
     color: "#e6edf3",
     fontSize: 16,
     fontWeight: "600",
-    maxWidth: 180,
+  },
+  itemNomePaid: {
+    color: "#8b949e",
+  },
+  itemPaidLabel: {
+    color: "#3fb950",
+    fontSize: 11,
+    fontWeight: "700",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+    marginTop: 2,
   },
   itemRight: {
     flexDirection: "row",
@@ -370,6 +419,9 @@ const styles = StyleSheet.create({
     color: "#f85149",
     fontSize: 16,
     fontWeight: "700",
+  },
+  itemValorPaid: {
+    color: "#3fb950",
   },
   separator: {
     height: 8,

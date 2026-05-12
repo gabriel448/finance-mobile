@@ -10,8 +10,9 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getSaldo, getCellConfig } from "../services/sheetsService";
+import { getSaldo, getCellConfig, CellConfig } from "../services/sheetsService";
 import AddExpenseModal from "../components/AddExpenseModal";
+import SimulateModal from "../components/SimulateModal";
 
 function formatCurrency(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -28,11 +29,13 @@ export default function HomeScreen() {
   const router = useRouter();
 
   // Inicializa com cache — se já temos um valor, não pisca ao voltar
-  const [saldo,        setSaldo]        = useState<number | null>(cachedSaldo);
-  const [loadMode,     setLoadMode]     = useState<LoadMode>("idle");
-  const [erro,         setErro]         = useState("");
-  const [modalVisible, setModalVisible] = useState(false);
-  const [pulseAnim]                     = useState(new Animated.Value(1));
+  const [saldo,          setSaldo]          = useState<number | null>(cachedSaldo);
+  const [loadMode,       setLoadMode]       = useState<LoadMode>("idle");
+  const [erro,           setErro]           = useState("");
+  const [modalVisible,   setModalVisible]   = useState(false);
+  const [simulateVisible,setSimulateVisible]= useState(false);
+  const [cellConfig,     setCellConfig]     = useState<CellConfig | null>(null);
+  const [pulseAnim]                         = useState(new Animated.Value(1));
 
   // ── Função central de carga ───────────────────────────────────────────────
   async function carregarSaldo(mode: "bg" | "full") {
@@ -42,8 +45,9 @@ export default function HomeScreen() {
     try {
       const config = await getCellConfig();
       if (!config) { router.replace("/setup"); return; }
+      setCellConfig(config);
       const s = await getSaldo(config.cellSaldo);
-      cachedSaldo = s;  // persiste para próxima montagem
+      cachedSaldo = s;
       setSaldo(s);
     } catch (e: any) {
       setErro(e.message ?? "Erro ao carregar saldo.");
@@ -138,6 +142,35 @@ export default function HomeScreen() {
         </Text>
       </TouchableOpacity>
 
+      {/* ── Simular saldo que vem ── */}
+      {(() => {
+        const simEnabled = !!(
+          cellConfig?.cellCustoFixo &&
+          (cellConfig?.cellSalario || cellConfig?.salarioManual != null)
+        );
+        return (
+          <TouchableOpacity
+            style={[styles.btnSimular, !simEnabled && styles.btnSimularLocked]}
+            onPress={() => simEnabled && setSimulateVisible(true)}
+            activeOpacity={simEnabled ? 0.85 : 1}
+          >
+            <Ionicons
+              name={simEnabled ? "calculator-outline" : "lock-closed-outline"}
+              size={20}
+              color={simEnabled ? "#58a6ff" : "#484f58"}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.btnSimularText, !simEnabled && { color: "#484f58" }]}>
+                Simular saldo que vem
+              </Text>
+              {!simEnabled && (
+                <Text style={styles.btnSimularHint}>Configure custos fixos e salário em Configurações</Text>
+              )}
+            </View>
+          </TouchableOpacity>
+        );
+      })()}
+
       <AddExpenseModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
@@ -145,6 +178,11 @@ export default function HomeScreen() {
           cachedSaldo = novoSaldo;
           setSaldo(novoSaldo);
         }}
+      />
+
+      <SimulateModal
+        visible={simulateVisible}
+        onClose={() => setSimulateVisible(false)}
       />
     </View>
   );
@@ -187,4 +225,16 @@ const styles = StyleSheet.create({
   btnAdicionarText: { color: "#fff", fontSize: 17, fontWeight: "700" },
   btnRefresh:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 20, padding: 10 },
   btnRefreshText: { color: "#58a6ff", fontSize: 14 },
+  btnSimular: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    backgroundColor: "#161b22", borderRadius: 14,
+    paddingVertical: 14, paddingHorizontal: 18,
+    marginTop: 12, borderWidth: 1, borderColor: "#21262d",
+  },
+  btnSimularLocked: {
+    borderColor: "#161b22",
+    backgroundColor: "#0d1117",
+  },
+  btnSimularText: { color: "#58a6ff", fontSize: 15, fontWeight: "700" },
+  btnSimularHint: { color: "#484f58", fontSize: 11, marginTop: 2 },
 });

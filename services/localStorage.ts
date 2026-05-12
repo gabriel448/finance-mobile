@@ -132,3 +132,44 @@ export async function getInstallmentMetadata(nome: string): Promise<string | nul
   const found = lista.find(d => d.nome === nome);
   return found ? found.data : null;
 }
+
+// ── Parcelas pagas (estado local, não sincronizado com a planilha) ──────────
+
+const PAID_INSTALLMENTS_KEY = "paid_installments";
+
+export async function getPaidInstallments(): Promise<string[]> {
+  const raw = await AsyncStorage.getItem(PAID_INSTALLMENTS_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export async function togglePaidInstallment(nome: string): Promise<boolean> {
+  const raw = await AsyncStorage.getItem(PAID_INSTALLMENTS_KEY);
+  const lista: string[] = raw ? JSON.parse(raw) : [];
+  const idx = lista.indexOf(nome);
+  if (idx >= 0) {
+    lista.splice(idx, 1);
+    await AsyncStorage.setItem(PAID_INSTALLMENTS_KEY, JSON.stringify(lista));
+    return false; // agora não-paga
+  }
+  lista.push(nome);
+  await AsyncStorage.setItem(PAID_INSTALLMENTS_KEY, JSON.stringify(lista));
+  return true; // agora paga
+}
+
+export async function markInstallmentPaid(nome: string): Promise<void> {
+  const raw = await AsyncStorage.getItem(PAID_INSTALLMENTS_KEY);
+  const lista: string[] = raw ? JSON.parse(raw) : [];
+  if (!lista.includes(nome)) {
+    lista.push(nome);
+    await AsyncStorage.setItem(PAID_INSTALLMENTS_KEY, JSON.stringify(lista));
+  }
+}
+
+export async function markAllInstallmentsPaid(nomes: string[]): Promise<void> {
+  const raw = await AsyncStorage.getItem(PAID_INSTALLMENTS_KEY);
+  const lista: string[] = raw ? JSON.parse(raw) : [];
+  for (const nome of nomes) {
+    if (!lista.includes(nome)) lista.push(nome);
+  }
+  await AsyncStorage.setItem(PAID_INSTALLMENTS_KEY, JSON.stringify(lista));
+}
