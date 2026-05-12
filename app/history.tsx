@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
+  TextInput,
   SectionList,
   TouchableOpacity,
   StyleSheet,
@@ -72,17 +73,26 @@ function groupByDay(despesas: Despesa[]): Section[] {
 }
 
 export default function HistoryScreen() {
-  const [sections,       setSections]       = useState<Section[]>([]);
-  const [allDespesas,    setAllDespesas]    = useState<Despesa[]>([]);
-  const [refreshing,     setRefreshing]     = useState(false);
+  const [allDespesas,     setAllDespesas]    = useState<Despesa[]>([]);
+  const [busca,           setBusca]          = useState("");
+  const [refreshing,      setRefreshing]     = useState(false);
   const [selectedDespesa, setSelectedDespesa] = useState<Despesa | null>(null);
-  const [detailVisible,  setDetailVisible]  = useState(false);
-  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [detailVisible,   setDetailVisible]  = useState(false);
+  const [confirmVisible,  setConfirmVisible] = useState(false);
+
+  const filteredSections = useMemo(() => {
+    const q = busca.trim().toLowerCase();
+    if (!q) return groupByDay(allDespesas);
+    const filtered = allDespesas.filter((d) =>
+      d.nome.toLowerCase().includes(q) ||
+      formatSectionTitle(d.data).toLowerCase().includes(q)
+    );
+    return groupByDay(filtered);
+  }, [allDespesas, busca]);
 
   async function carregarHistorico() {
     const data = await getDespesas();
     setAllDespesas(data);
-    setSections(groupByDay(data));
   }
 
   useFocusEffect(
@@ -107,19 +117,18 @@ export default function HistoryScreen() {
     if (!config) throw new Error("Células não configuradas. Vá em Configurações.");
     await subtractExpense(despesa.valor, config.cellGasto, config.cellSaldo);
     await removeDespesa(despesa.id);
-    const updated = allDespesas.filter((d) => d.id !== despesa.id);
-    setAllDespesas(updated);
-    setSections(groupByDay(updated));
+    setAllDespesas((prev) => prev.filter((d) => d.id !== despesa.id));
   }
 
   async function handleClearAll() {
     await clearDespesas();
     setAllDespesas([]);
-    setSections([]);
     setConfirmVisible(false);
   }
 
-  const totalLancamentos = allDespesas.length;
+  const totalLancamentos  = allDespesas.length;
+  const hasResults        = filteredSections.length > 0;
+  const isSearching       = busca.trim().length > 0;
 
   function renderSectionHeader({ section }: { section: Section }) {
     return (
@@ -153,7 +162,7 @@ export default function HistoryScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0d1117" />
 
-      {sections.length === 0 ? (
+      {totalLancamentos === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="receipt-outline" size={64} color="#21262d" />
           <Text style={styles.emptyTitle}>Sem despesas</Text>
@@ -163,40 +172,69 @@ export default function HistoryScreen() {
         </View>
       ) : (
         <>
-          {/* Barra de resumo geral */}
+          {/* Barra de resumo + busca */}
           <View style={styles.summaryRow}>
             <Text style={styles.summaryText}>
               {totalLancamentos} lançamento{totalLancamentos !== 1 ? "s" : ""}
             </Text>
             <Text style={styles.summaryDays}>
-              {sections.length} dia{sections.length !== 1 ? "s" : ""}
+              {filteredSections.length} dia{filteredSections.length !== 1 ? "s" : ""}
             </Text>
           </View>
 
-          <SectionList
-            sections={sections}
-            keyExtractor={(item) => item.id}
-            renderItem={renderItem}
-            renderSectionHeader={renderSectionHeader}
-            contentContainerStyle={styles.listContent}
-            showsVerticalScrollIndicator={false}
-            stickySectionHeadersEnabled={true}
-            refreshControl={
-              <RefreshControl
-                refreshing={refreshing}
-                onRefresh={onRefresh}
-                tintColor="#58a6ff"
-                colors={["#58a6ff"]}
-              />
-            }
-            SectionSeparatorComponent={() => <View style={{ height: 4 }} />}
-            ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
-          />
+          <View style={styles.searchRow}>
+            <Ionicons name="search-outline" size={16} color="#484f58" style={styles.searchIcon} />
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Buscar por nome ou data..."
+              placeholderTextColor="#484f58"
+              value={busca}
+              onChangeText={setBusca}
+              autoCorrect={false}
+              clearButtonMode="while-editing"
+            />
+            {isSearching && (
+              <TouchableOpacity onPress={() => setBusca("")} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close-circle" size={16} color="#484f58" />
+              </TouchableOpacity>
+            )}
+          </View>
+
+          {!hasResults ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="search-outline" size={48} color="#21262d" />
+              <Text style={styles.emptyTitle}>Sem resultados</Text>
+              <Text style={styles.emptySubtitle}>
+                Nenhuma despesa encontrada para "{busca}".
+              </Text>
+            </View>
+          ) : (
+            <SectionList
+              sections={filteredSections}
+              keyExtractor={(item) => item.id}
+              renderItem={renderItem}
+              renderSectionHeader={renderSectionHeader}
+              contentContainerStyle={styles.listContent}
+              showsVerticalScrollIndicator={false}
+              stickySectionHeadersEnabled={true}
+              keyboardShouldPersistTaps="handled"
+              refreshControl={
+                <RefreshControl
+                  refreshing={refreshing}
+                  onRefresh={onRefresh}
+                  tintColor="#58a6ff"
+                  colors={["#58a6ff"]}
+                />
+              }
+              SectionSeparatorComponent={() => <View style={{ height: 4 }} />}
+              ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
+            />
+          )}
         </>
       )}
 
       {/* FAB — apagar histórico */}
-      {sections.length > 0 && (
+      {totalLancamentos > 0 && (
         <TouchableOpacity
           style={styles.fab}
           onPress={() => setConfirmVisible(true)}
@@ -258,6 +296,30 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#0d1117",
+  },
+
+  // ── Busca ─────────────────────────────────────────────────────────────────
+  searchRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginHorizontal: 12,
+    marginTop: 10,
+    marginBottom: 2,
+    backgroundColor: "#161b22",
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: "#21262d",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    color: "#e6edf3",
+    fontSize: 14,
+    paddingVertical: 0,
   },
 
   // ── Barra de resumo geral ──────────────────────────────────────────────────
