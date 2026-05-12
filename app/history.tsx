@@ -2,7 +2,7 @@ import React, { useState, useCallback } from "react";
 import {
   View,
   Text,
-  FlatList,
+  SectionList,
   TouchableOpacity,
   StyleSheet,
   StatusBar,
@@ -15,8 +15,20 @@ import { subtractExpense, getCellConfig } from "../services/sheetsService";
 import ExpenseDetailModal from "../components/ExpenseDetailModal";
 import { Ionicons } from "@expo/vector-icons";
 
-function formatData(isoString: string): string {
+function getDayKey(isoString: string): string {
   const d = new Date(isoString);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+}
+
+function formatSectionTitle(isoString: string): string {
+  const d = new Date(isoString);
+  const hoje = new Date();
+  const ontem = new Date();
+  ontem.setDate(ontem.getDate() - 1);
+
+  if (getDayKey(isoString) === getDayKey(hoje.toISOString())) return "Hoje";
+  if (getDayKey(isoString) === getDayKey(ontem.toISOString())) return "Ontem";
+
   const dia = String(d.getDate()).padStart(2, "0");
   const mes = String(d.getMonth() + 1).padStart(2, "0");
   const ano = String(d.getFullYear()).slice(2);
@@ -27,16 +39,46 @@ function formatValor(valor: number): string {
   return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+interface Section {
+  title: string;
+  dayKey: string;
+  total: number;
+  data: Despesa[];
+}
+
+function groupByDay(despesas: Despesa[]): Section[] {
+  const map = new Map<string, Section>();
+
+  for (const d of despesas) {
+    const key = getDayKey(d.data);
+    if (!map.has(key)) {
+      map.set(key, {
+        title: formatSectionTitle(d.data),
+        dayKey: key,
+        total: 0,
+        data: [],
+      });
+    }
+    const section = map.get(key)!;
+    section.data.push(d);
+    section.total += d.valor;
+  }
+
+  return Array.from(map.values());
+}
+
 export default function HistoryScreen() {
-  const [historico, setHistorico] = useState<Despesa[]>([]);
-  const [refreshing, setRefreshing] = useState(false);
+  const [sections,       setSections]       = useState<Section[]>([]);
+  const [allDespesas,    setAllDespesas]    = useState<Despesa[]>([]);
+  const [refreshing,     setRefreshing]     = useState(false);
   const [selectedDespesa, setSelectedDespesa] = useState<Despesa | null>(null);
-  const [detailVisible, setDetailVisible] = useState(false);
+  const [detailVisible,  setDetailVisible]  = useState(false);
   const [confirmVisible, setConfirmVisible] = useState(false);
 
   async function carregarHistorico() {
     const data = await getDespesas();
-    setHistorico(data);
+    setAllDespesas(data);
+    setSections(groupByDay(data));
   }
 
   useFocusEffect(
@@ -56,41 +98,48 @@ export default function HistoryScreen() {
     setDetailVisible(true);
   }
 
-  // ── Reembolso: subtrai da planilha + apaga do histórico local ─────────────
   async function handleRefund(despesa: Despesa) {
     const config = await getCellConfig();
     if (!config) throw new Error("Células não configuradas. Vá em Configurações.");
     await subtractExpense(despesa.valor, config.cellGasto, config.cellSaldo);
     await removeDespesa(despesa.id);
-    setHistorico((prev) => prev.filter((d) => d.id !== despesa.id));
+    const updated = allDespesas.filter((d) => d.id !== despesa.id);
+    setAllDespesas(updated);
+    setSections(groupByDay(updated));
   }
 
-  // ── Apagar todo o histórico ────────────────────────────────────────────────
   async function handleClearAll() {
     await clearDespesas();
-    setHistorico([]);
+    setAllDespesas([]);
+    setSections([]);
     setConfirmVisible(false);
   }
 
-  function renderItem({ item, index }: { item: Despesa; index: number }) {
+  const totalLancamentos = allDespesas.length;
+
+  function renderSectionHeader({ section }: { section: Section }) {
+    return (
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>{section.title}</Text>
+        <Text style={styles.sectionTotal}>{formatValor(section.total)}</Text>
+      </View>
+    );
+  }
+
+  function renderItem({ item }: { item: Despesa }) {
     return (
       <TouchableOpacity
         style={styles.item}
         onPress={() => handlePress(item)}
-        activeOpacity={0.7}
+        activeOpacity={0.75}
       >
-        <View style={styles.itemLeft}>
-          <View style={styles.itemIndexBadge}>
-            <Text style={styles.itemIndex}>{index + 1}</Text>
-          </View>
-          <View>
-            <Text style={styles.itemNome} numberOfLines={1}>{item.nome}</Text>
-            <Text style={styles.itemData}>{formatData(item.data)}</Text>
-          </View>
+        <View style={styles.itemIconBox}>
+          <Ionicons name="arrow-down-outline" size={18} color="#f85149" />
         </View>
+        <Text style={styles.itemNome} numberOfLines={1}>{item.nome}</Text>
         <View style={styles.itemRight}>
           <Text style={styles.itemValor}>{formatValor(item.valor)}</Text>
-          <Ionicons name="chevron-forward-outline" size={16} color="#484f58" />
+          <Ionicons name="chevron-forward-outline" size={14} color="#30363d" />
         </View>
       </TouchableOpacity>
     );
@@ -100,7 +149,7 @@ export default function HistoryScreen() {
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0d1117" />
 
-      {historico.length === 0 ? (
+      {sections.length === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="receipt-outline" size={64} color="#21262d" />
           <Text style={styles.emptyTitle}>Sem despesas</Text>
@@ -110,22 +159,24 @@ export default function HistoryScreen() {
         </View>
       ) : (
         <>
+          {/* Barra de resumo geral */}
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryText}>{historico.length} lançamento{historico.length !== 1 ? "s" : ""}</Text>
-            <Text style={styles.summaryTotal}>
-              Total:{" "}
-              <Text style={styles.summaryTotalValue}>
-                {formatValor(historico.reduce((acc, d) => acc + d.valor, 0))}
-              </Text>
+            <Text style={styles.summaryText}>
+              {totalLancamentos} lançamento{totalLancamentos !== 1 ? "s" : ""}
+            </Text>
+            <Text style={styles.summaryDays}>
+              {sections.length} dia{sections.length !== 1 ? "s" : ""}
             </Text>
           </View>
 
-          <FlatList
-            data={historico}
+          <SectionList
+            sections={sections}
             keyExtractor={(item) => item.id}
             renderItem={renderItem}
+            renderSectionHeader={renderSectionHeader}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            stickySectionHeadersEnabled={true}
             refreshControl={
               <RefreshControl
                 refreshing={refreshing}
@@ -134,13 +185,14 @@ export default function HistoryScreen() {
                 colors={["#58a6ff"]}
               />
             }
-            ItemSeparatorComponent={() => <View style={styles.separator} />}
+            SectionSeparatorComponent={() => <View style={{ height: 4 }} />}
+            ItemSeparatorComponent={() => <View style={styles.itemSeparator} />}
           />
         </>
       )}
 
-      {/* ── FAB — apagar histórico ── */}
-      {historico.length > 0 && (
+      {/* FAB — apagar histórico */}
+      {sections.length > 0 && (
         <TouchableOpacity
           style={styles.fab}
           onPress={() => setConfirmVisible(true)}
@@ -150,7 +202,6 @@ export default function HistoryScreen() {
         </TouchableOpacity>
       )}
 
-      {/* ── Modal de detalhes ── */}
       <ExpenseDetailModal
         visible={detailVisible}
         despesa={selectedDespesa}
@@ -158,7 +209,7 @@ export default function HistoryScreen() {
         onRefund={handleRefund}
       />
 
-      {/* ── Modal de confirmação — apagar tudo ── */}
+      {/* Modal de confirmação — apagar tudo */}
       <Modal
         visible={confirmVisible}
         transparent
@@ -167,14 +218,13 @@ export default function HistoryScreen() {
       >
         <View style={styles.confirmOverlay}>
           <View style={styles.confirmCard}>
-            {/* Ícone de aviso */}
             <View style={styles.confirmIconCircle}>
               <Ionicons name="warning-outline" size={36} color="#f85149" />
             </View>
 
             <Text style={styles.confirmTitle}>Apagar histórico?</Text>
             <Text style={styles.confirmSubtitle}>
-              Todos os {historico.length} lançamento{historico.length !== 1 ? "s" : ""} serão removidos permanentemente. Esta ação não pode ser desfeita.
+              Todos os {totalLancamentos} lançamento{totalLancamentos !== 1 ? "s" : ""} serão removidos permanentemente. Esta ação não pode ser desfeita.
             </Text>
 
             <TouchableOpacity
@@ -205,71 +255,83 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#0d1117",
   },
+
+  // ── Barra de resumo geral ──────────────────────────────────────────────────
   summaryRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderColor: "#21262d",
   },
   summaryText: {
     color: "#8b949e",
-    fontSize: 13,
+    fontSize: 12,
   },
-  summaryTotal: {
-    color: "#8b949e",
-    fontSize: 13,
+  summaryDays: {
+    color: "#484f58",
+    fontSize: 12,
   },
-  summaryTotalValue: {
-    color: "#f85149",
-    fontWeight: "700",
-  },
-  listContent: {
-    padding: 12,
-    paddingBottom: 120, // espaço para o FAB não cobrir o último item
-  },
-  item: {
+
+  // ── Cabeçalho de seção (dia) ───────────────────────────────────────────────
+  sectionHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: "#161b22",
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
-    borderWidth: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: "#0d1117",
+    borderBottomWidth: 1,
     borderColor: "#21262d",
+    marginTop: 8,
   },
-  itemLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
-    flex: 1,
-  },
-  itemIndexBadge: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#21262d",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  itemIndex: {
+  sectionTitle: {
     color: "#8b949e",
     fontSize: 12,
     fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+  },
+  sectionTotal: {
+    color: "#f85149",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+
+  // ── Itens ─────────────────────────────────────────────────────────────────
+  listContent: {
+    paddingBottom: 120,
+  },
+  item: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: "#161b22",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginHorizontal: 12,
+    marginVertical: 3,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#21262d",
+  },
+  itemIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "rgba(248,81,73,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(248,81,73,0.18)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   itemNome: {
+    flex: 1,
     color: "#e6edf3",
     fontSize: 15,
     fontWeight: "600",
-    maxWidth: 180,
-  },
-  itemData: {
-    color: "#8b949e",
-    fontSize: 12,
-    marginTop: 2,
   },
   itemRight: {
     flexDirection: "row",
@@ -281,9 +343,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: "700",
   },
-  separator: {
-    height: 8,
+  itemSeparator: {
+    height: 0,
   },
+
+  // ── Empty state ────────────────────────────────────────────────────────────
   emptyState: {
     flex: 1,
     justifyContent: "center",
@@ -302,7 +366,8 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 20,
   },
-  // ── FAB ────────────────────────────────────────────────────────────────────
+
+  // ── FAB ───────────────────────────────────────────────────────────────────
   fab: {
     position: "absolute",
     bottom: 60,
@@ -318,6 +383,7 @@ const styles = StyleSheet.create({
     shadowRadius: 12,
     elevation: 8,
   },
+
   // ── Modal de confirmação ───────────────────────────────────────────────────
   confirmOverlay: {
     flex: 1,
