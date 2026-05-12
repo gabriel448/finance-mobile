@@ -42,6 +42,7 @@ function formatValor(valor: number): string {
 interface Section {
   title: string;
   dayKey: string;
+  timestamp: number; // início do dia em ms, usado para ordenação
   total: number;
   data: Despesa[];
 }
@@ -52,9 +53,12 @@ function groupByDay(despesas: Despesa[]): Section[] {
   for (const d of despesas) {
     const key = getDayKey(d.data);
     if (!map.has(key)) {
+      const date = new Date(d.data);
+      const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
       map.set(key, {
         title: formatSectionTitle(d.data),
         dayKey: key,
+        timestamp: startOfDay,
         total: 0,
         data: [],
       });
@@ -64,7 +68,7 @@ function groupByDay(despesas: Despesa[]): Section[] {
     section.total += d.valor;
   }
 
-  return Array.from(map.values());
+  return Array.from(map.values()).sort((a, b) => b.timestamp - a.timestamp);
 }
 
 export default function HistoryScreen() {
