@@ -8,6 +8,7 @@ import { Stack, useRouter, usePathname, useSegments } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getCellConfig, getScriptUrl } from "../services/sheetsService";
+import SimulateModal from "../components/SimulateModal";
 
 const DRAWER_WIDTH = 280;
 
@@ -17,8 +18,9 @@ export default function RootLayout() {
   const segments = useSegments();
   const checked  = useRef(false);
 
-  const [ready,      setReady]      = useState(false);
-  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [ready,           setReady]           = useState(false);
+  const [drawerOpen,      setDrawerOpen]      = useState(false);
+  const [simulateVisible, setSimulateVisible] = useState(false);
 
   const translateX     = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
@@ -77,11 +79,16 @@ export default function RootLayout() {
 
   const isSetup = pathname === "/setup" || pathname === "/onboarding";
 
-  const navItems = [
-    { label: "Início",        icon: "home-outline"     as const, route: "/"         },
-    { label: "Histórico",     icon: "time-outline"     as const, route: "/history"  },
-    { label: "Parcelas",      icon: "card-outline"     as const, route: "/installments" },
-    { label: "Configurações", icon: "settings-outline" as const, route: "/settings" },
+  type NavItem =
+    | { label: string; icon: React.ComponentProps<typeof Ionicons>["name"]; route: string; onPress?: never }
+    | { label: string; icon: React.ComponentProps<typeof Ionicons>["name"]; route?: never; onPress: () => void };
+
+  const navItems: NavItem[] = [
+    { label: "Início",           icon: "home-outline",       route: "/"             },
+    { label: "Histórico",        icon: "time-outline",       route: "/history"      },
+    { label: "Parcelas",         icon: "card-outline",       route: "/installments" },
+    { label: "Simular saldo",    icon: "calculator-outline", onPress: () => { setDrawerOpen(false); setSimulateVisible(true); } },
+    { label: "Configurações",    icon: "settings-outline",   route: "/settings"     },
   ];
 
   return (
@@ -133,6 +140,8 @@ export default function RootLayout() {
         </Animated.View>
       )}
 
+      <SimulateModal visible={simulateVisible} onClose={() => setSimulateVisible(false)} />
+
       {/* Drawer */}
       {!isSetup && (
         <Animated.View style={[styles.drawer, { transform: [{ translateX }] }]}>
@@ -143,12 +152,12 @@ export default function RootLayout() {
             </View>
 
             {navItems.map((item) => {
-              const active = pathname === item.route;
+              const active = item.route ? pathname === item.route : false;
               return (
                 <TouchableOpacity
-                  key={item.route}
+                  key={item.label}
                   style={[styles.navItem, active && styles.navItemActive]}
-                  onPress={() => router.push(item.route as any)}
+                  onPress={() => item.onPress ? item.onPress() : router.push(item.route as any)}
                   activeOpacity={0.7}
                 >
                   <Ionicons name={item.icon} size={22} color={active ? "#58a6ff" : "#8b949e"} />

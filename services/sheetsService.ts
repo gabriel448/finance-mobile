@@ -71,6 +71,7 @@ export interface CellConfig {
   cellCustoFixo?: string;     // ex: "D20" — total de custos fixos
   cellSalario?: string;       // ex: "B2"  — salário/capital (recomendado)
   salarioManual?: number;     // fallback se não usar célula
+  diaFechamento?: number;     // dia do mês em que o cartão fecha (1–28)
 }
 
 export async function saveCellConfig(config: CellConfig): Promise<void> {
@@ -135,6 +136,18 @@ export async function addExpense(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "addExpense", nome, valor, cellGasto, cellSaldo, spreadsheetId }),
+  });
+  const novoSaldo = parseFloat(String(data.novoSaldo).replace(",", "."));
+  if (isNaN(novoSaldo)) throw new Error(`Saldo inválido recebido: "${data.novoSaldo}"`);
+  return novoSaldo;
+}
+
+export async function zeroCellGasto(cellGasto: string, cellSaldo: string): Promise<number> {
+  const { url, spreadsheetId } = await getCredentials();
+  const data = await safeFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ action: "zeroCellGasto", cellGasto, cellSaldo, spreadsheetId }),
   });
   const novoSaldo = parseFloat(String(data.novoSaldo).replace(",", "."));
   if (isNaN(novoSaldo)) throw new Error(`Saldo inválido recebido: "${data.novoSaldo}"`);
@@ -282,7 +295,7 @@ export async function addDespesa(despesa: Omit<Despesa, "id">): Promise<Despesa>
   const nova: Despesa    = { ...despesa, id: Date.now().toString() };
   lista.unshift(nova);
   await AsyncStorage.setItem(HIST_KEY, JSON.stringify(lista));
-  syncHistoricoToSheet(lista);
+  await syncHistoricoToSheet(lista);
   return nova;
 }
 

@@ -7,12 +7,12 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Modal,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getSaldo, getCellConfig, CellConfig } from "../services/sheetsService";
+import { getSaldo, getCellConfig, CellConfig, zeroCellGasto } from "../services/sheetsService";
 import AddExpenseModal from "../components/AddExpenseModal";
-import SimulateModal from "../components/SimulateModal";
 
 function formatCurrency(value: number): string {
   return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -32,8 +32,9 @@ export default function HomeScreen() {
   const [saldo,          setSaldo]          = useState<number | null>(cachedSaldo);
   const [loadMode,       setLoadMode]       = useState<LoadMode>("idle");
   const [erro,           setErro]           = useState("");
-  const [modalVisible,   setModalVisible]   = useState(false);
-  const [simulateVisible,setSimulateVisible]= useState(false);
+  const [modalVisible,  setModalVisible]  = useState(false);
+  const [zerarVisible,  setZerarVisible]  = useState(false);
+  const [zerandoGastos,     setZerandoGastos]     = useState(false);
   const [cellConfig,     setCellConfig]     = useState<CellConfig | null>(null);
   const [pulseAnim]                         = useState(new Animated.Value(1));
 
@@ -70,6 +71,21 @@ export default function HomeScreen() {
       Animated.timing(pulseAnim, { toValue: 1,    duration: 150, useNativeDriver: true, easing: Easing.out(Easing.ease) }),
     ]).start();
     carregarSaldo("full");
+  }
+
+  async function handleZerarGastos() {
+    if (!cellConfig) return;
+    setZerandoGastos(true);
+    try {
+      const novoSaldo = await zeroCellGasto(cellConfig.cellGasto, cellConfig.cellSaldo);
+      cachedSaldo = novoSaldo;
+      setSaldo(novoSaldo);
+    } catch (e: any) {
+      setErro(e.message ?? "Erro ao zerar gastos.");
+    } finally {
+      setZerandoGastos(false);
+      setZerarVisible(false);
+    }
   }
 
   const saldoColor = saldo !== null && saldo < 0 ? "#f85149" : "#3fb950";
@@ -123,6 +139,17 @@ export default function HomeScreen() {
         <Text style={styles.btnAdicionarText}>Adicionar Despesa</Text>
       </TouchableOpacity>
 
+      {/* ── Zerar Gastos ── */}
+      <TouchableOpacity
+        style={styles.btnZerar}
+        onPress={() => setZerarVisible(true)}
+        disabled={loadMode !== "idle" || !cellConfig}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="trash-outline" size={18} color="#f85149" />
+        <Text style={styles.btnZerarText}>Zerar gastos do mês</Text>
+      </TouchableOpacity>
+
       {/* ── Atualizar ── */}
       <TouchableOpacity
         style={styles.btnRefresh}
@@ -142,35 +169,6 @@ export default function HomeScreen() {
         </Text>
       </TouchableOpacity>
 
-      {/* ── Simular saldo que vem ── */}
-      {(() => {
-        const simEnabled = !!(
-          cellConfig?.cellCustoFixo &&
-          (cellConfig?.cellSalario || cellConfig?.salarioManual != null)
-        );
-        return (
-          <TouchableOpacity
-            style={[styles.btnSimular, !simEnabled && styles.btnSimularLocked]}
-            onPress={() => simEnabled && setSimulateVisible(true)}
-            activeOpacity={simEnabled ? 0.85 : 1}
-          >
-            <Ionicons
-              name={simEnabled ? "calculator-outline" : "lock-closed-outline"}
-              size={20}
-              color={simEnabled ? "#58a6ff" : "#484f58"}
-            />
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.btnSimularText, !simEnabled && { color: "#484f58" }]}>
-                Simular saldo que vem
-              </Text>
-              {!simEnabled && (
-                <Text style={styles.btnSimularHint}>Configure custos fixos e salário em Configurações</Text>
-              )}
-            </View>
-          </TouchableOpacity>
-        );
-      })()}
-
       <AddExpenseModal
         visible={modalVisible}
         onClose={() => setModalVisible(false)}
@@ -180,10 +178,38 @@ export default function HomeScreen() {
         }}
       />
 
-      <SimulateModal
-        visible={simulateVisible}
-        onClose={() => setSimulateVisible(false)}
-      />
+      <Modal visible={zerarVisible} transparent animationType="fade" onRequestClose={() => setZerarVisible(false)}>
+        <View style={styles.confirmOverlay}>
+          <View style={styles.confirmCard}>
+            <View style={styles.confirmIconCircle}>
+              <Ionicons name="trash-outline" size={32} color="#f85149" />
+            </View>
+            <Text style={styles.confirmTitle}>Zerar gastos?</Text>
+            <Text style={styles.confirmSubtitle}>
+              O valor da célula de despesas será zerado na planilha. Esta ação não pode ser desfeita.
+            </Text>
+            <TouchableOpacity
+              style={styles.btnConfirmZerar}
+              onPress={handleZerarGastos}
+              disabled={zerandoGastos}
+              activeOpacity={0.8}
+            >
+              {zerandoGastos
+                ? <ActivityIndicator color="#fff" />
+                : <><Ionicons name="checkmark-outline" size={18} color="#fff" /><Text style={styles.btnConfirmZerarText}>Confirmar</Text></>
+              }
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.btnCancelarZerar}
+              onPress={() => setZerarVisible(false)}
+              disabled={zerandoGastos}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.btnCancelarZerarText}>Cancelar</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -225,16 +251,36 @@ const styles = StyleSheet.create({
   btnAdicionarText: { color: "#fff", fontSize: 17, fontWeight: "700" },
   btnRefresh:     { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, marginTop: 20, padding: 10 },
   btnRefreshText: { color: "#58a6ff", fontSize: 14 },
-  btnSimular: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    backgroundColor: "#161b22", borderRadius: 14,
-    paddingVertical: 14, paddingHorizontal: 18,
-    marginTop: 12, borderWidth: 1, borderColor: "#21262d",
+  btnZerar: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    borderRadius: 14, paddingVertical: 13, marginTop: 12,
+    borderWidth: 1, borderColor: "rgba(248,81,73,0.3)",
+    backgroundColor: "rgba(248,81,73,0.06)",
   },
-  btnSimularLocked: {
-    borderColor: "#161b22",
-    backgroundColor: "#0d1117",
+  btnZerarText: { color: "#f85149", fontSize: 15, fontWeight: "700" },
+  confirmOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.8)",
+    justifyContent: "center", alignItems: "center", paddingHorizontal: 28,
   },
-  btnSimularText: { color: "#58a6ff", fontSize: 15, fontWeight: "700" },
-  btnSimularHint: { color: "#484f58", fontSize: 11, marginTop: 2 },
+  confirmCard: {
+    backgroundColor: "#161b22", borderRadius: 20, width: "100%",
+    padding: 28, alignItems: "center", borderWidth: 1, borderColor: "#30363d",
+  },
+  confirmIconCircle: {
+    width: 68, height: 68, borderRadius: 34,
+    backgroundColor: "rgba(248,81,73,0.08)", borderWidth: 1, borderColor: "rgba(248,81,73,0.3)",
+    alignItems: "center", justifyContent: "center", marginBottom: 18,
+  },
+  confirmTitle: { color: "#e6edf3", fontSize: 20, fontWeight: "700", marginBottom: 10 },
+  confirmSubtitle: { color: "#8b949e", fontSize: 14, textAlign: "center", lineHeight: 20, marginBottom: 28 },
+  btnConfirmZerar: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    width: "100%", backgroundColor: "#b91c1c", borderRadius: 12, paddingVertical: 15, marginBottom: 10,
+  },
+  btnConfirmZerarText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  btnCancelarZerar: {
+    width: "100%", alignItems: "center", paddingVertical: 14,
+    borderRadius: 12, backgroundColor: "#21262d", borderWidth: 1, borderColor: "#30363d",
+  },
+  btnCancelarZerarText: { color: "#8b949e", fontSize: 15, fontWeight: "600" },
 });

@@ -12,6 +12,7 @@ export default function SetupScreen() {
   const [cellSaldo,        setCellSaldo]        = useState("F9");
   const [cellGasto,        setCellGasto]        = useState("I8");
   const [cellParcelasStart,setCellParcelasStart] = useState("");
+  const [diaFechamento,    setDiaFechamento]    = useState("");
   const [cellCustoFixo,    setCellCustoFixo]    = useState("");
   const [cellSalario,      setCellSalario]      = useState("");
   const [salarioManual,    setSalarioManual]    = useState("");
@@ -26,6 +27,7 @@ export default function SetupScreen() {
       setCellSaldo(c.cellSaldo);
       setCellGasto(c.cellGasto);
       if (c.cellParcelasStart) setCellParcelasStart(c.cellParcelasStart);
+      if (c.diaFechamento != null) setDiaFechamento(String(c.diaFechamento));
       if (c.cellCustoFixo)    setCellCustoFixo(c.cellCustoFixo);
       if (c.cellSalario)      setCellSalario(c.cellSalario);
       if (c.salarioManual != null) setSalarioManual(String(c.salarioManual));
@@ -40,6 +42,15 @@ export default function SetupScreen() {
       Alert.alert("Preencha os campos", "Informe as referências das duas células.");
       return;
     }
+    if (cellParcelasStart.trim() && !diaFechamento.trim()) {
+      Alert.alert("Campo obrigatório", "Informe o dia de fechamento do cartão para usar a aba de parcelas.");
+      return;
+    }
+    const diaFechNum = diaFechamento.trim() ? parseInt(diaFechamento.trim()) : undefined;
+    if (diaFechNum !== undefined && (isNaN(diaFechNum) || diaFechNum < 1 || diaFechNum > 28)) {
+      Alert.alert("Dia inválido", "O dia de fechamento deve ser entre 1 e 28.");
+      return;
+    }
     setLoading(true);
     try {
       const valor = await getSaldo(saldo);
@@ -52,6 +63,7 @@ export default function SetupScreen() {
         cellSaldo: saldo,
         cellGasto: gasto,
         cellParcelasStart: cellParcelasStart.trim().toUpperCase() || undefined,
+        diaFechamento:     diaFechNum,
         cellCustoFixo:     cellCustoFixo.trim().toUpperCase()     || undefined,
         cellSalario:       cellSalario.trim().toUpperCase()        || undefined,
         salarioManual:     (!cellSalario.trim() && salarioNum && !isNaN(salarioNum))
@@ -139,6 +151,27 @@ export default function SetupScreen() {
           <Text style={styles.hint}>1ª célula da coluna "Restantes" (ex: K5)</Text>
           <TextInput style={styles.input} value={cellParcelasStart} onChangeText={setCellParcelasStart}
             placeholder="ex: K5" placeholderTextColor="#484f58" autoCapitalize="characters" autoCorrect={false} />
+
+          <View style={styles.divider} />
+
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4, gap: 6 }}>
+            <Text style={[styles.label, { marginBottom: 0 }]}>Dia de Fechamento do Cartão</Text>
+            {cellParcelasStart.trim().length > 0 && (
+              <View style={styles.requiredBadge}>
+                <Text style={styles.requiredBadgeText}>Obrigatório</Text>
+              </View>
+            )}
+          </View>
+          <Text style={styles.hint}>Compras a partir deste dia entram na fatura do próximo mês (1–28)</Text>
+          <TextInput
+            style={styles.input}
+            value={diaFechamento}
+            onChangeText={setDiaFechamento}
+            placeholder="ex: 10"
+            placeholderTextColor="#484f58"
+            keyboardType="number-pad"
+            maxLength={2}
+          />
         </View>
 
         {/* ── Card de simulação ── */}
@@ -306,6 +339,12 @@ const styles = StyleSheet.create({
     fontSize: 22, fontWeight: "700", textAlign: "center", letterSpacing: 2,
   },
   divider: { height: 1, backgroundColor: "#21262d", marginVertical: 20 },
+  requiredBadge: {
+    backgroundColor: "rgba(248,81,73,0.1)", borderRadius: 6,
+    borderWidth: 1, borderColor: "rgba(248,81,73,0.3)",
+    paddingHorizontal: 6, paddingVertical: 2,
+  },
+  requiredBadgeText: { color: "#f85149", fontSize: 10, fontWeight: "700" },
 
   dividerOr: { flexDirection: "row", alignItems: "center", gap: 8, marginVertical: 16 },
   dividerLine: { flex: 1, height: 1, backgroundColor: "#21262d" },

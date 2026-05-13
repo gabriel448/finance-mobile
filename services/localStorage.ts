@@ -133,6 +133,52 @@ export async function getInstallmentMetadata(nome: string): Promise<string | nul
   return found ? found.data : null;
 }
 
+export async function getAllInstallmentMetadata(): Promise<Map<string, string>> {
+  const raw = await AsyncStorage.getItem(HIST_PARCELAS_KEY);
+  if (!raw) return new Map();
+  const lista: InstallmentMetadata[] = JSON.parse(raw);
+  return new Map(lista.map(item => [item.nome, item.data]));
+}
+
+export function isProximoMes(diaFechamento: number, dataAdicionado: string): boolean {
+  const added = new Date(dataAdicionado);
+  const hoje = new Date();
+  const threshold = new Date(hoje.getFullYear(), hoje.getMonth(), diaFechamento);
+  return added >= threshold;
+}
+
+// ── Parcelas do mês que vem (armazenadas localmente, fora da planilha) ────────
+
+export interface ProximaParcela {
+  id: string;
+  nome: string;
+  valor: number;
+  restantes: number;
+  dataAdicionado: string;
+}
+
+const PROXIMAS_KEY = "proximas_parcelas";
+
+export async function addProximaParcela(p: Omit<ProximaParcela, "id">): Promise<ProximaParcela> {
+  const raw = await AsyncStorage.getItem(PROXIMAS_KEY);
+  const lista: ProximaParcela[] = raw ? JSON.parse(raw) : [];
+  const nova: ProximaParcela = { ...p, id: Date.now().toString() };
+  lista.unshift(nova);
+  await AsyncStorage.setItem(PROXIMAS_KEY, JSON.stringify(lista));
+  return nova;
+}
+
+export async function getProximasParcelas(): Promise<ProximaParcela[]> {
+  const raw = await AsyncStorage.getItem(PROXIMAS_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+
+export async function removeProximaParcelaByNome(nome: string): Promise<void> {
+  const raw = await AsyncStorage.getItem(PROXIMAS_KEY);
+  const lista: ProximaParcela[] = raw ? JSON.parse(raw) : [];
+  await AsyncStorage.setItem(PROXIMAS_KEY, JSON.stringify(lista.filter(p => p.nome !== nome)));
+}
+
 // ── Parcelas pagas (estado local, não sincronizado com a planilha) ──────────
 
 const PAID_INSTALLMENTS_KEY = "paid_installments";

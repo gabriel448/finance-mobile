@@ -13,8 +13,8 @@ import {
   Vibration,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { getInstallments, Installment, payInstallment, payAllInstallments, deleteInstallment, getCellConfig } from "../services/sheetsService";
-import { getPaidInstallments, togglePaidInstallment, markInstallmentPaid, markAllInstallmentsPaid } from "../services/localStorage";
+import { getInstallments, Installment, payInstallment, payAllInstallments, deleteInstallment, getCellConfig, addInstallmentToSheet } from "../services/sheetsService";
+import { getPaidInstallments, togglePaidInstallment, markInstallmentPaid, markAllInstallmentsPaid, isProximoMes, getProximasParcelas, removeProximaParcelaByNome, addInstallmentMetadata, ProximaParcela } from "../services/localStorage";
 import { Ionicons } from "@expo/vector-icons";
 import InstallmentDetailModal from "../components/InstallmentDetailModal";
 import AddInstallmentModal from "../components/AddInstallmentModal";
@@ -24,18 +24,23 @@ function formatValor(valor: number): string {
   return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+type ConfigStatus = "ok" | "no_cells" | "no_dia_fechamento";
+
 export default function InstallmentsScreen() {
   const router = useRouter();
   const [installments, setInstallments] = useState<Installment[]>([]);
+  const [proximasParcelas, setProximasParcelas] = useState<ProximaParcela[]>([]);
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [isConfigured, setIsConfigured] = useState(true);
-  
+  const [configStatus, setConfigStatus] = useState<ConfigStatus>("ok");
+  const [diaFechamento, setDiaFechamento] = useState<number>(10);
+
   const [selectedInstallment, setSelectedInstallment] = useState<Installment | null>(null);
+  const [selectedIsProximoMes, setSelectedIsProximoMes] = useState(false);
   const [detailVisible, setDetailVisible] = useState(false);
   const [addVisible, setAddVisible] = useState(false);
   const [payingAll, setPayingAll] = useState(false);
-  
+
   const [paidNomes, setPaidNomes] = useState<Set<string>>(new Set());
   const [confirmAllVisible, setConfirmAllVisible] = useState(false);
   const [successAllVisible, setSuccessAllVisible] = useState(false);
@@ -43,17 +48,40 @@ export default function InstallmentsScreen() {
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const playerCheck = useAudioPlayer(require("../assets/check.mp3"));
 
+  async function promoverParcelasSeNecessario(dia: number) {
+    const proximas = await getProximasParcelas();
+    const toPromote = proximas.filter(p => !isProximoMes(dia, p.dataAdicionado));
+    for (const p of toPromote) {
+      try {
+        await addInstallmentToSheet(p.restantes, p.nome, p.valor);
+        await addInstallmentMetadata(p.nome, p.dataAdicionado);
+        await removeProximaParcelaByNome(p.nome);
+      } catch {
+        // Falha silenciosa — tenta novamente na próxima abertura
+      }
+    }
+  }
+
   async function checkConfigAndLoad() {
     setLoading(true);
     const config = await getCellConfig();
     if (!config || !config.cellParcelasStart) {
-      setIsConfigured(false);
+      setConfigStatus("no_cells");
       setLoading(false);
       return;
     }
-    setIsConfigured(true);
+    if (!config.diaFechamento) {
+      setConfigStatus("no_dia_fechamento");
+      setLoading(false);
+      return;
+    }
+    setConfigStatus("ok");
+    setDiaFechamento(config.diaFechamento);
+
+    await promoverParcelasSeNecessario(config.diaFechamento);
+
     const [, paid] = await Promise.all([
-      carregarParcelas(),
+      carregarTudo(),
       getPaidInstallments(),
     ]) as [void, string[]];
     setPaidNomes(new Set(paid));
@@ -66,10 +94,14 @@ export default function InstallmentsScreen() {
     }, [])
   );
 
-  async function carregarParcelas() {
+  async function carregarTudo() {
     try {
-      const data = await getInstallments();
-      setInstallments(data);
+      const [sheet, proximas] = await Promise.all([
+        getInstallments(),
+        getProximasParcelas(),
+      ]);
+      setInstallments(sheet);
+      setProximasParcelas(proximas);
     } catch (e) {
       console.log(e);
     }
@@ -77,12 +109,19 @@ export default function InstallmentsScreen() {
 
   async function onRefresh() {
     setRefreshing(true);
-    await carregarParcelas();
+    await carregarTudo();
     setRefreshing(false);
   }
 
   function handlePress(item: Installment) {
     setSelectedInstallment(item);
+    setSelectedIsProximoMes(false);
+    setDetailVisible(true);
+  }
+
+  function handlePressProxima(item: ProximaParcela) {
+    setSelectedInstallment({ rowIndex: -1, nome: item.nome, valor: item.valor, restantes: item.restantes });
+    setSelectedIsProximoMes(true);
     setDetailVisible(true);
   }
 
@@ -103,11 +142,11 @@ export default function InstallmentsScreen() {
       await payAllInstallments();
       await markAllInstallmentsPaid(installments.map((i) => i.nome));
       setPaidNomes(new Set(installments.map((i) => i.nome)));
-      await carregarParcelas();
+      await carregarTudo();
 
       setConfirmAllVisible(false);
       setSuccessAllVisible(true);
-      
+
       try {
         playerCheck.volume = 1.0;
         playerCheck.seekTo(0);
@@ -140,15 +179,20 @@ export default function InstallmentsScreen() {
     );
   }
 
-  if (!isConfigured) {
+  if (configStatus !== "ok") {
+    const isExistingUser = configStatus === "no_dia_fechamento";
     return (
       <View style={styles.container}>
         <StatusBar barStyle="light-content" backgroundColor="#0d1117" />
         <View style={styles.emptyState}>
           <Ionicons name="card-outline" size={64} color="#21262d" />
-          <Text style={styles.emptyTitle}>Configuração Necessária</Text>
+          <Text style={styles.emptyTitle}>
+            {isExistingUser ? "Nova Configuração Necessária" : "Configuração Necessária"}
+          </Text>
           <Text style={styles.emptySubtitle}>
-            Para ter acesso à aba de parcelas, você precisa configurar a célula inicial na tela de configurações.
+            {isExistingUser
+              ? "Informe o dia de fechamento do cartão para continuar usando a aba de parcelas."
+              : "Configure a célula inicial de parcelas na tela de configurações."}
           </Text>
           <TouchableOpacity
             style={styles.btnConfig}
@@ -183,9 +227,7 @@ export default function InstallmentsScreen() {
           <Text style={[styles.itemNome, paid && styles.itemNomePaid]} numberOfLines={1}>
             {item.nome}
           </Text>
-          {paid && (
-            <Text style={styles.itemPaidLabel}>Paga</Text>
-          )}
+          {paid && <Text style={styles.itemPaidLabel}>Paga</Text>}
         </View>
         <View style={styles.itemRight}>
           <Text style={[styles.itemValor, paid && styles.itemValorPaid]}>
@@ -197,11 +239,48 @@ export default function InstallmentsScreen() {
     );
   }
 
+  function renderNextMonthSection() {
+    if (proximasParcelas.length === 0) return null;
+    return (
+      <View style={styles.nextMonthSection}>
+        <View style={styles.nextMonthHeader}>
+          <Ionicons name="calendar-outline" size={15} color="#d4a017" />
+          <Text style={styles.nextMonthTitle}>Parcelas do mês que vem</Text>
+          <View style={styles.nextMonthBadge}>
+            <Text style={styles.nextMonthBadgeText}>{proximasParcelas.length}</Text>
+          </View>
+        </View>
+        <Text style={styles.nextMonthHint}>
+          Adicionadas a partir do dia {diaFechamento} — entram na fatura do próximo mês
+        </Text>
+        {proximasParcelas.map((item) => (
+          <TouchableOpacity
+            key={item.id}
+            style={styles.itemNextMonth}
+            onPress={() => handlePressProxima(item)}
+            activeOpacity={0.7}
+          >
+            <View style={styles.itemBadgeNextMonth}>
+              <Text style={styles.itemRestantesNextMonth}>{item.restantes}x</Text>
+            </View>
+            <Text style={styles.itemNomeNextMonth} numberOfLines={1}>{item.nome}</Text>
+            <View style={styles.itemRightNextMonth}>
+              <Text style={styles.itemValorNextMonth}>{formatValor(item.valor)}</Text>
+              <Ionicons name="chevron-forward-outline" size={16} color="#484f58" />
+            </View>
+          </TouchableOpacity>
+        ))}
+      </View>
+    );
+  }
+
+  const totalItens = installments.length + proximasParcelas.length;
+
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0d1117" />
 
-      {installments.length === 0 ? (
+      {totalItens === 0 ? (
         <View style={styles.emptyState}>
           <Ionicons name="card-outline" size={64} color="#21262d" />
           <Text style={styles.emptyTitle}>Sem parcelas</Text>
@@ -212,20 +291,25 @@ export default function InstallmentsScreen() {
       ) : (
         <>
           <View style={styles.summaryRow}>
-            <Text style={styles.summaryText}>{installments.length} item(s) parcelado(s)</Text>
-            <TouchableOpacity
-              style={styles.btnPayAll}
-              onPress={() => setConfirmAllVisible(true)}
-              disabled={payingAll}
-              activeOpacity={0.7}
-            >
-              {payingAll ? <ActivityIndicator size="small" color="#fff" /> : (
-                <>
-                  <Ionicons name="cash-outline" size={16} color="#fff" />
-                  <Text style={styles.btnPayAllText}>Pagar Todas</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            <Text style={styles.summaryText}>
+              {installments.length} item(s) este mês
+              {proximasParcelas.length > 0 && ` · ${proximasParcelas.length} próximo mês`}
+            </Text>
+            {installments.length > 0 && (
+              <TouchableOpacity
+                style={styles.btnPayAll}
+                onPress={() => setConfirmAllVisible(true)}
+                disabled={payingAll}
+                activeOpacity={0.7}
+              >
+                {payingAll ? <ActivityIndicator size="small" color="#fff" /> : (
+                  <>
+                    <Ionicons name="cash-outline" size={16} color="#fff" />
+                    <Text style={styles.btnPayAllText}>Pagar Todas</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
           </View>
 
           <FlatList
@@ -243,11 +327,11 @@ export default function InstallmentsScreen() {
               />
             }
             ItemSeparatorComponent={() => <View style={styles.separator} />}
+            ListFooterComponent={renderNextMonthSection()}
           />
         </>
       )}
 
-      {/* ── FAB — adicionar parcela ── */}
       <TouchableOpacity
         style={styles.fab}
         onPress={() => setAddVisible(true)}
@@ -259,24 +343,29 @@ export default function InstallmentsScreen() {
       <InstallmentDetailModal
         visible={detailVisible}
         installment={selectedInstallment}
+        isProximoMes={selectedIsProximoMes}
         onClose={() => setDetailVisible(false)}
         onPay={async (inst) => {
           const res = await payInstallment(inst.rowIndex);
           await markInstallmentPaid(inst.nome);
           setPaidNomes((prev) => new Set([...prev, inst.nome]));
-          carregarParcelas();
+          carregarTudo();
           return res;
         }}
         onDelete={async (inst) => {
-          await deleteInstallment(inst.rowIndex);
-          carregarParcelas();
+          if (selectedIsProximoMes) {
+            await removeProximaParcelaByNome(inst.nome);
+          } else {
+            await deleteInstallment(inst.rowIndex);
+          }
+          carregarTudo();
         }}
       />
 
       <AddInstallmentModal
         visible={addVisible}
         onClose={() => setAddVisible(false)}
-        onSuccess={() => carregarParcelas()}
+        onSuccess={() => carregarTudo()}
       />
 
       <Modal visible={confirmAllVisible} transparent animationType="fade" onRequestClose={() => setConfirmAllVisible(false)}>
@@ -287,7 +376,10 @@ export default function InstallmentsScreen() {
             </View>
             <Text style={styles.confirmTitle}>Pagar Todas?</Text>
             <Text style={styles.confirmSubtitle}>
-              Pagar 1 parcela de {installments.length} itens?
+              Pagar 1 parcela de {installments.length} item(s) deste mês.
+              {proximasParcelas.length > 0
+                ? `\n\n${proximasParcelas.length} parcela(s) do mês que vem não serão afetadas.`
+                : ""}
             </Text>
 
             <TouchableOpacity style={styles.btnConfirm} onPress={executePayAll} activeOpacity={0.8} disabled={payingAll}>
@@ -426,6 +518,96 @@ const styles = StyleSheet.create({
   separator: {
     height: 8,
   },
+
+  // ── Seção: parcelas do mês que vem ────────────────────────────────────────
+  nextMonthSection: {
+    margin: 12,
+    marginTop: 20,
+    backgroundColor: "#161b22",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(212,160,23,0.3)",
+    overflow: "hidden",
+  },
+  nextMonthHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    backgroundColor: "rgba(212,160,23,0.06)",
+    borderBottomWidth: 1,
+    borderColor: "rgba(212,160,23,0.2)",
+  },
+  nextMonthTitle: {
+    color: "#d4a017",
+    fontSize: 13,
+    fontWeight: "700",
+    flex: 1,
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+  },
+  nextMonthBadge: {
+    backgroundColor: "rgba(212,160,23,0.15)",
+    borderRadius: 10,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+  },
+  nextMonthBadgeText: {
+    color: "#d4a017",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  nextMonthHint: {
+    color: "#484f58",
+    fontSize: 11,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderColor: "#21262d",
+  },
+  itemNextMonth: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderColor: "#21262d",
+  },
+  itemBadgeNextMonth: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(212,160,23,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(212,160,23,0.2)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  itemRestantesNextMonth: {
+    color: "#d4a017",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  itemNomeNextMonth: {
+    flex: 1,
+    color: "#8b949e",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  itemRightNextMonth: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  itemValorNextMonth: {
+    color: "#d4a017",
+    fontSize: 15,
+    fontWeight: "700",
+  },
+
+  // ── Empty / config ────────────────────────────────────────────────────────
   emptyState: {
     flex: 1,
     justifyContent: "center",

@@ -245,6 +245,17 @@ function doPost(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (body.action === "zeroCellGasto") {
+      var sheet = getSheet(spreadsheetId);
+      sheet.getRange(cellGasto).setValue(0);
+      SpreadsheetApp.flush();
+      Utilities.sleep(1500);
+      var novoSaldo = sheet.getRange(cellSaldo).getValue();
+      return ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: novoSaldo }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     if (body.action === "syncHistorico") {
       var ss = SpreadsheetApp.openById(spreadsheetId);
       var sheet = ss.getSheetByName("Historico");

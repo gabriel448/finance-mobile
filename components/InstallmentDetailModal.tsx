@@ -16,6 +16,7 @@ import { getInstallmentMetadata } from "../services/localStorage";
 interface Props {
   visible: boolean;
   installment: Installment | null;
+  isProximoMes?: boolean;
   onClose: () => void;
   onPay: (installment: Installment) => Promise<number>;
   onDelete: (installment: Installment) => Promise<void>;
@@ -34,7 +35,7 @@ function formatValor(valor: number): string {
   return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
-export default function InstallmentDetailModal({ visible, installment, onClose, onPay, onDelete }: Props) {
+export default function InstallmentDetailModal({ visible, installment, isProximoMes = false, onClose, onPay, onDelete }: Props) {
   const [loading, setLoading]   = useState(false);
   const [success, setSuccess]   = useState(false);
   const [successMsg, setSuccessMsg] = useState("");
@@ -162,6 +163,15 @@ export default function InstallmentDetailModal({ visible, installment, onClose, 
             <Text style={styles.headerText}>Detalhes da Parcela</Text>
           </View>
 
+          {isProximoMes && (
+            <View style={styles.nextMonthBanner}>
+              <Ionicons name="calendar-outline" size={16} color="#d4a017" />
+              <Text style={styles.nextMonthBannerText}>
+                Esta parcela entra na fatura do próximo mês
+              </Text>
+            </View>
+          )}
+
           <View style={styles.row}>
             <Text style={styles.rowLabel}>🛒 Produto</Text>
             <Text style={styles.rowValue}>{installment.nome}</Text>
@@ -192,19 +202,26 @@ export default function InstallmentDetailModal({ visible, installment, onClose, 
 
           {/* ── Botões ── */}
           <View style={styles.btnGroup}>
-            <TouchableOpacity
-              style={[styles.btnPay, (loading || success) && styles.btnDisabled]}
-              onPress={handlePay}
-              disabled={loading || success}
-              activeOpacity={0.8}
-            >
-              {loading ? <ActivityIndicator color="#fff" /> : (
-                <>
-                  <Ionicons name="cash-outline" size={18} color="#fff" />
-                  <Text style={styles.btnPayText}>Pagar Parcela</Text>
-                </>
-              )}
-            </TouchableOpacity>
+            {isProximoMes ? (
+              <View style={styles.btnPayNextMonth}>
+                <Ionicons name="calendar-outline" size={18} color="#484f58" />
+                <Text style={styles.btnPayNextMonthText}>Disponível no próximo mês</Text>
+              </View>
+            ) : (
+              <TouchableOpacity
+                style={[styles.btnPay, (loading || success) && styles.btnDisabled]}
+                onPress={handlePay}
+                disabled={loading || success}
+                activeOpacity={0.8}
+              >
+                {loading ? <ActivityIndicator color="#fff" /> : (
+                  <>
+                    <Ionicons name="cash-outline" size={18} color="#fff" />
+                    <Text style={styles.btnPayText}>Pagar Parcela</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            )}
 
             <TouchableOpacity
               style={[styles.btnDelete, (loading || success) && styles.btnDisabled]}
@@ -393,6 +410,39 @@ const styles = StyleSheet.create({
   },
   btnDisabled: {
     opacity: 0.5,
+  },
+  btnPayNextMonth: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#21262d",
+    borderRadius: 12,
+    paddingVertical: 14,
+    borderWidth: 1,
+    borderColor: "#30363d",
+  },
+  btnPayNextMonthText: {
+    color: "#484f58",
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  nextMonthBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(212,160,23,0.08)",
+    borderWidth: 1,
+    borderColor: "rgba(212,160,23,0.2)",
+    margin: 16,
+    marginBottom: 0,
+    padding: 12,
+    borderRadius: 10,
+  },
+  nextMonthBannerText: {
+    color: "#d4a017",
+    fontSize: 13,
+    flex: 1,
   },
   btnVoltar: {
     margin: 20,

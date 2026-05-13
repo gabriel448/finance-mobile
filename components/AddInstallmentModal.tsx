@@ -13,7 +13,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { addInstallmentToSheet, getCellConfig } from "../services/sheetsService";
-import { addInstallmentMetadata } from "../services/localStorage";
+import { addInstallmentMetadata, addProximaParcela, isProximoMes } from "../services/localStorage";
 import { useAudioPlayer } from "expo-audio";
 
 interface Props {
@@ -29,6 +29,7 @@ export default function AddInstallmentModal({ visible, onClose, onSuccess }: Pro
   const [loading, setLoading] = useState(false);
   const [erro, setErro]       = useState("");
   const [success, setSuccess] = useState(false);
+  const [isNextMonthSave, setIsNextMonthSave] = useState(false);
 
   const scaleAnim   = useRef(new Animated.Value(0)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -42,7 +43,8 @@ export default function AddInstallmentModal({ visible, onClose, onSuccess }: Pro
     }
   }, [visible]);
 
-  function showSuccessAndClose() {
+  function showSuccessAndClose(nextMonth = false) {
+    setIsNextMonthSave(nextMonth);
     setSuccess(true);
 
     try {
@@ -86,12 +88,18 @@ export default function AddInstallmentModal({ visible, onClose, onSuccess }: Pro
     try {
       const config = await getCellConfig();
       if (!config || !config.cellParcelasStart) throw new Error("Células de parcelas não configuradas.");
-      
-      await addInstallmentToSheet(restNum, nome.trim(), valorNum);
-      // Adiciona no histórico específico de parcelas para manter a data
-      await addInstallmentMetadata(nome.trim(), new Date().toISOString());
-      
-      showSuccessAndClose();
+
+      const hoje = new Date().toISOString();
+      const proximoMes = config.diaFechamento ? isProximoMes(config.diaFechamento, hoje) : false;
+
+      if (proximoMes) {
+        await addProximaParcela({ nome: nome.trim(), valor: valorNum, restantes: restNum, dataAdicionado: hoje });
+      } else {
+        await addInstallmentToSheet(restNum, nome.trim(), valorNum);
+      }
+      await addInstallmentMetadata(nome.trim(), hoje);
+
+      showSuccessAndClose(proximoMes);
     } catch (e: any) {
       setErro(e.message ?? "Erro ao adicionar parcela.");
     } finally {
@@ -115,7 +123,7 @@ export default function AddInstallmentModal({ visible, onClose, onSuccess }: Pro
                 </View>
               </Animated.View>
               <Animated.Text style={[styles.successText, { opacity: opacityAnim }]}>
-                Parcela adicionada!
+                {isNextMonthSave ? "Guardada para o mês que vem!" : "Parcela adicionada!"}
               </Animated.Text>
             </Animated.View>
           )}
