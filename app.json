@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Finanças",
+    "name": "Hero",
     "slug": "finance-mobile-1",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -19,7 +19,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/icon_app.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#0d1117"
       },
       "edgeToEdgeEnabled": true,

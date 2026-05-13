@@ -1,4 +1,4 @@
-// Google Apps Script — Finance Tracker Backend (Standalone / Universal)
+// Google Apps Script — Hero Backend (Standalone / Universal)
 //
 // COMO PUBLICAR:
 //  1. Acesse script.google.com e crie um novo projeto

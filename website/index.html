@@ -1,0 +1,1455 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Hero — Controle financeiro integrado ao Google Sheets</title>
+  <link rel="icon" type="image/png" href="favicon.png" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <style>
+    /* ── TOKENS ── */
+    :root {
+      --bg:          #0d1117;
+      --bg2:         #080b10;
+      --surface:     #161b22;
+      --surface2:    #1c2230;
+      --border:      #21262d;
+      --border2:     #30363d;
+      --text:        #e6edf3;
+      --muted:       #8b949e;
+      --subtle:      #484f58;
+      --blue:        #58a6ff;
+      --blue-dim:    rgba(88,166,255,0.12);
+      --blue-mid:    rgba(88,166,255,0.25);
+      --blue-cta:    #1f6feb;
+      --green:       #3fb950;
+      --green-bg:    #238636;
+      --green-dim:   rgba(63,185,80,0.12);
+      --red:         #f85149;
+      --yellow:      #d4a017;
+      --yellow-dim:  rgba(212,160,23,0.12);
+      --glass:       rgba(22,27,34,0.7);
+      --glass-border: rgba(255,255,255,0.06);
+      --radius-sm:   8px;
+      --radius:      14px;
+      --radius-lg:   20px;
+      --radius-xl:   28px;
+      --shadow:      0 4px 24px rgba(0,0,0,0.5);
+      --shadow-blue: 0 0 40px rgba(88,166,255,0.15);
+      --font:        'Inter', system-ui, sans-serif;
+      --mono:        'IBM Plex Mono', monospace;
+    }
+
+    /* ── RESET ── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    button { font-family: var(--font); cursor: pointer; }
+
+    /* ── REDUCED MOTION ── */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+
+    /* ── BACKGROUND ORBS ── */
+    .bg-canvas {
+      position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+    }
+    .orb {
+      position: absolute; border-radius: 50%;
+      filter: blur(100px); opacity: 0.12;
+      animation: drift 20s ease-in-out infinite alternate;
+    }
+    .orb-1 { width: 600px; height: 600px; background: #1f6feb; top: -200px; left: -200px; animation-duration: 22s; }
+    .orb-2 { width: 500px; height: 500px; background: #238636; bottom: -150px; right: -150px; animation-duration: 18s; animation-direction: alternate-reverse; }
+    .orb-3 { width: 350px; height: 350px; background: #8250df; top: 40%; left: 60%; animation-duration: 26s; }
+    @keyframes drift { from { transform: translate(0,0) scale(1); } to { transform: translate(40px, 30px) scale(1.05); } }
+
+    /* subtle grid overlay */
+    body::before {
+      content: '';
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background-image: linear-gradient(rgba(255,255,255,0.015) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(255,255,255,0.015) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+
+    /* ── LAYOUT ── */
+    .container { max-width: 1000px; margin: 0 auto; padding: 0 24px; position: relative; z-index: 1; }
+    section { padding: 96px 0; }
+
+    /* ── NAV ── */
+    nav {
+      position: fixed; top: 16px; left: 50%; transform: translateX(-50%);
+      width: calc(100% - 32px); max-width: 960px;
+      z-index: 100;
+      background: rgba(13,17,23,0.8);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-xl);
+      padding: 0 20px;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.4);
+    }
+    .nav-logo {
+      display: flex; align-items: center; gap: 10px;
+      font-weight: 700; font-size: 15px; color: var(--text);
+      text-decoration: none;
+    }
+    .nav-logo:hover { text-decoration: none; }
+    .nav-logo-icon {
+      width: 30px; height: 30px;
+      background: linear-gradient(135deg, #238636, #3fb950);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .nav-links { display: flex; gap: 6px; }
+    .nav-links a {
+      color: var(--muted); font-size: 13px; font-weight: 500;
+      padding: 6px 12px; border-radius: 8px;
+      transition: color 200ms, background 200ms;
+    }
+    .nav-links a:hover { color: var(--text); background: rgba(255,255,255,0.06); text-decoration: none; }
+    .nav-cta {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--green-bg); color: #fff;
+      border: none; border-radius: 10px;
+      padding: 7px 16px; font-size: 13px; font-weight: 600;
+      transition: background 200ms, transform 150ms;
+      text-decoration: none;
+    }
+    .nav-cta:hover { background: #2ea043; transform: translateY(-1px); text-decoration: none; }
+
+    /* ── HERO ── */
+    #hero {
+      padding-top: 140px; padding-bottom: 80px;
+      text-align: center;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: var(--blue-dim); border: 1px solid var(--blue-mid);
+      border-radius: 100px; padding: 5px 14px 5px 8px;
+      font-size: 12px; font-weight: 600; color: var(--blue);
+      margin-bottom: 32px;
+    }
+    .hero-badge-dot {
+      width: 6px; height: 6px; background: var(--green); border-radius: 50%;
+      box-shadow: 0 0 6px var(--green);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:.4; } }
+
+    .hero-title {
+      font-size: clamp(38px, 6vw, 68px);
+      font-weight: 700; line-height: 1.08; letter-spacing: -1.5px;
+      margin-bottom: 22px;
+    }
+    .hero-title span {
+      background: linear-gradient(135deg, #e6edf3 20%, #58a6ff 60%, #3fb950 100%);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-sub {
+      font-size: 18px; color: var(--muted); font-weight: 400;
+      max-width: 520px; margin: 0 auto 40px; line-height: 1.7;
+    }
+    .hero-actions { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+    .btn-primary {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: linear-gradient(135deg, #238636, #2ea043);
+      color: #fff; border: none; border-radius: var(--radius);
+      padding: 13px 26px; font-size: 15px; font-weight: 600;
+      box-shadow: 0 0 24px rgba(35,134,54,0.35);
+      transition: transform 150ms, box-shadow 200ms;
+      text-decoration: none;
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 4px 32px rgba(35,134,54,0.5); text-decoration: none; }
+    .btn-outline {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: transparent; color: var(--text);
+      border: 1px solid var(--border2); border-radius: var(--radius);
+      padding: 13px 26px; font-size: 15px; font-weight: 500;
+      transition: border-color 200ms, background 200ms, transform 150ms;
+      text-decoration: none;
+    }
+    .btn-outline:hover { border-color: var(--blue); color: var(--blue); background: var(--blue-dim); transform: translateY(-2px); text-decoration: none; }
+
+    .hero-note { color: var(--subtle); font-size: 12px; margin-top: 18px; }
+
+    /* stats strip */
+    .stats-strip {
+      display: flex; gap: 0; justify-content: center;
+      border: 1px solid var(--border); border-radius: var(--radius-lg);
+      background: var(--glass); backdrop-filter: blur(12px);
+      overflow: hidden; margin-top: 64px;
+    }
+    .stat-item {
+      flex: 1; padding: 20px 24px; text-align: center;
+      border-right: 1px solid var(--border);
+    }
+    .stat-item:last-child { border-right: none; }
+    .stat-num { font-size: 28px; font-weight: 700; color: var(--text); letter-spacing: -0.5px; }
+    .stat-label { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* ── SECTION HEADER ── */
+    .section-label {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 1.5px;
+      color: var(--blue); margin-bottom: 12px;
+    }
+    .section-label::before {
+      content: ''; display: block; width: 20px; height: 1px; background: var(--blue);
+    }
+    h2 { font-size: 34px; font-weight: 700; letter-spacing: -0.5px; margin-bottom: 10px; }
+    .section-desc { color: var(--muted); font-size: 16px; max-width: 520px; line-height: 1.7; margin-bottom: 52px; }
+
+    /* ── FEATURES ── */
+    .feature-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 14px;
+    }
+    .feature-card {
+      background: var(--glass);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      padding: 26px;
+      transition: border-color 250ms, transform 200ms, box-shadow 250ms;
+      cursor: default;
+    }
+    .feature-card:hover {
+      border-color: rgba(88,166,255,0.25);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 40px rgba(0,0,0,0.3), 0 0 0 1px rgba(88,166,255,0.08);
+    }
+    .feature-icon-wrap {
+      width: 44px; height: 44px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px;
+    }
+    .icon-blue  { background: var(--blue-dim); color: var(--blue); }
+    .icon-green { background: var(--green-dim); color: var(--green); }
+    .icon-red   { background: rgba(248,81,73,0.12); color: var(--red); }
+    .icon-yellow{ background: var(--yellow-dim); color: var(--yellow); }
+    .icon-purple{ background: rgba(130,80,223,0.12); color: #a371f7; }
+    .icon-teal  { background: rgba(56,189,248,0.1); color: #38bdf8; }
+    .feature-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+    .feature-card p { font-size: 13px; color: var(--muted); line-height: 1.65; }
+
+    /* ── HOW IT WORKS ── */
+    .steps-list { display: flex; flex-direction: column; gap: 0; }
+    .step {
+      display: grid; grid-template-columns: 48px 1fr;
+      gap: 0 20px; position: relative;
+      padding-bottom: 36px;
+    }
+    .step:last-child { padding-bottom: 0; }
+    .step-left { display: flex; flex-direction: column; align-items: center; }
+    .step-num {
+      width: 48px; height: 48px; border-radius: 50%; flex-shrink: 0;
+      background: var(--blue-dim); border: 1px solid var(--blue-mid);
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 16px; color: var(--blue);
+      position: relative; z-index: 1;
+    }
+    .step-line {
+      flex: 1; width: 1px;
+      background: linear-gradient(to bottom, var(--border2), transparent);
+      margin-top: 8px;
+    }
+    .step:last-child .step-line { display: none; }
+    .step-body { padding-top: 10px; }
+    .step-body h3 { font-size: 16px; font-weight: 600; margin-bottom: 6px; }
+    .step-body p { font-size: 14px; color: var(--muted); line-height: 1.7; }
+    .step-body code {
+      font-family: var(--mono); font-size: 12px;
+      background: var(--surface); border: 1px solid var(--border);
+      padding: 1px 6px; border-radius: 5px; color: var(--blue);
+    }
+    .step-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 6px; padding: 4px 10px;
+      font-size: 12px; font-weight: 500; color: var(--muted);
+      margin-top: 10px;
+    }
+
+    /* ── CELL MANUAL ── */
+    .manual-list { display: flex; flex-direction: column; gap: 14px; }
+    .cell-card {
+      background: var(--glass);
+      backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-lg);
+      overflow: hidden;
+      transition: border-color 250ms;
+    }
+    .cell-card:hover { border-color: rgba(255,255,255,0.1); }
+    .cell-card-head {
+      display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+      padding: 16px 22px;
+      border-bottom: 1px solid var(--border);
+      background: rgba(255,255,255,0.02);
+    }
+    .cell-tag {
+      font-family: var(--mono); font-size: 12px; font-weight: 500;
+      background: var(--bg); border: 1px solid var(--border2);
+      border-radius: 6px; padding: 3px 10px;
+    }
+    .cell-tag-req { color: var(--blue); border-color: var(--blue-mid); }
+    .cell-tag-opt { color: var(--green); border-color: rgba(63,185,80,0.3); }
+    .badge {
+      font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .8px;
+      padding: 2px 8px; border-radius: 5px;
+    }
+    .badge-req { background: rgba(248,81,73,0.08); color: var(--red); border: 1px solid rgba(248,81,73,0.25); }
+    .badge-opt { background: var(--green-dim); color: var(--green); border: 1px solid rgba(63,185,80,0.25); }
+    .cell-card-head h3 { font-size: 15px; font-weight: 600; }
+    .cell-card-body { padding: 20px 22px; }
+    .cell-card-body p { font-size: 14px; color: var(--muted); line-height: 1.7; margin-bottom: 10px; }
+    .cell-card-body p:last-child { margin-bottom: 0; }
+    .cell-card-body strong { color: var(--text); }
+
+    .example-tag {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--mono); font-size: 12px;
+      background: var(--yellow-dim); border: 1px solid rgba(212,160,23,0.25);
+      color: var(--yellow); border-radius: 8px;
+      padding: 6px 12px; margin-top: 8px;
+    }
+
+    .tip {
+      display: flex; gap: 10px; align-items: flex-start;
+      background: var(--blue-dim); border: 1px solid var(--blue-mid);
+      border-radius: var(--radius-sm); padding: 12px 14px; margin-top: 12px;
+    }
+    .tip svg { flex-shrink: 0; margin-top: 1px; }
+    .tip p { font-size: 13px; color: var(--blue); margin: 0; }
+
+    .warn {
+      display: flex; gap: 10px; align-items: flex-start;
+      background: rgba(210,167,50,0.07); border: 1px solid rgba(210,167,50,0.2);
+      border-radius: var(--radius-sm); padding: 12px 14px; margin-top: 12px;
+    }
+    .warn svg { flex-shrink: 0; margin-top: 1px; }
+    .warn p { font-size: 13px; color: var(--yellow); margin: 0; }
+
+    /* sheet demo table */
+    .sheet-demo {
+      background: var(--bg); border: 1px solid var(--border2);
+      border-radius: var(--radius); overflow: hidden; margin-top: 16px;
+    }
+    .sheet-demo-bar {
+      background: var(--surface); border-bottom: 1px solid var(--border);
+      padding: 8px 14px;
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; color: var(--muted); font-weight: 500;
+    }
+    .sheet-table { width: 100%; border-collapse: collapse; }
+    .sheet-table th {
+      font-family: var(--mono); font-size: 11px; font-weight: 500;
+      color: var(--subtle); text-align: center;
+      background: rgba(255,255,255,0.02);
+      border-bottom: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      padding: 7px 16px;
+    }
+    .sheet-table td {
+      font-family: var(--mono); font-size: 13px;
+      border-bottom: 1px solid var(--border);
+      border-right: 1px solid var(--border);
+      padding: 7px 16px; color: var(--muted);
+    }
+    .sheet-table tr:last-child td { border-bottom: none; }
+    .sheet-table td:first-child { text-align: center; color: var(--subtle); background: rgba(255,255,255,0.015); }
+    .tc-blue   { color: var(--blue); font-weight: 600; }
+    .tc-green  { color: var(--green); font-weight: 600; }
+    .tc-label  { color: var(--subtle) !important; font-style: italic; }
+
+    /* ── DOWNLOAD SECTION ── */
+    .download-card {
+      background: var(--glass);
+      backdrop-filter: blur(20px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius-xl);
+      padding: 60px 40px;
+      text-align: center;
+      position: relative; overflow: hidden;
+    }
+    .download-card::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: radial-gradient(ellipse at 50% 0%, rgba(35,134,54,0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .download-icon {
+      width: 80px; height: 80px; border-radius: 22px;
+      background: linear-gradient(135deg, #1a3a28, #238636);
+      display: flex; align-items: center; justify-content: center;
+      margin: 0 auto 24px;
+      box-shadow: 0 8px 32px rgba(35,134,54,0.3);
+    }
+    .download-card h3 { font-size: 26px; font-weight: 700; margin-bottom: 10px; }
+    .download-card p { color: var(--muted); font-size: 14px; max-width: 400px; margin: 0 auto 28px; line-height: 1.7; }
+    .btn-download {
+      display: inline-flex; align-items: center; gap: 10px;
+      background: linear-gradient(135deg, #238636, #2ea043);
+      color: #fff; border: none; border-radius: var(--radius);
+      padding: 16px 36px; font-size: 17px; font-weight: 600;
+      box-shadow: 0 0 32px rgba(35,134,54,0.4);
+      transition: transform 150ms, box-shadow 200ms;
+      text-decoration: none;
+    }
+    .btn-download:hover { transform: translateY(-2px); box-shadow: 0 6px 40px rgba(35,134,54,0.55); text-decoration: none; }
+    .download-meta { color: var(--subtle); font-size: 12px; margin-top: 16px; }
+
+    /* ── SCRIPT ── */
+    .deploy-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 32px; }
+    .deploy-item {
+      display: flex; gap: 14px; align-items: flex-start;
+      background: var(--glass); backdrop-filter: blur(12px);
+      border: 1px solid var(--glass-border);
+      border-radius: var(--radius); padding: 16px 18px;
+    }
+    .deploy-num {
+      min-width: 28px; height: 28px; border-radius: 50%;
+      background: var(--blue-dim); border: 1px solid var(--blue-mid);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 12px; font-weight: 700; color: var(--blue);
+      flex-shrink: 0;
+    }
+    .deploy-item p { font-size: 13px; color: var(--muted); margin: 0; line-height: 1.6; }
+    .deploy-item strong { color: var(--text); }
+    .deploy-item code {
+      font-family: var(--mono); font-size: 11px;
+      background: var(--bg); border: 1px solid var(--border);
+      padding: 1px 5px; border-radius: 4px; color: var(--blue);
+    }
+
+    /* code block */
+    .code-box {
+      background: var(--bg2); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); overflow: hidden;
+    }
+    .code-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 18px; border-bottom: 1px solid var(--border);
+      background: var(--surface);
+    }
+    .code-bar-left { display: flex; align-items: center; gap: 10px; }
+    .traffic-lights { display: flex; gap: 6px; }
+    .tl { width: 12px; height: 12px; border-radius: 50%; }
+    .tl-r { background: #ff5f57; }
+    .tl-y { background: #febc2e; }
+    .tl-g { background: #28c840; }
+    .code-fname { font-family: var(--mono); font-size: 12px; color: var(--muted); }
+    .copy-btn {
+      display: flex; align-items: center; gap: 6px;
+      background: var(--blue-dim); border: 1px solid var(--blue-mid);
+      border-radius: 8px; padding: 5px 12px;
+      color: var(--blue); font-size: 12px; font-weight: 600;
+      cursor: pointer; transition: background 200ms, color 200ms;
+    }
+    .copy-btn:hover { background: rgba(88,166,255,0.2); }
+    .copy-btn.copied { background: var(--green-dim); border-color: rgba(63,185,80,0.3); color: var(--green); }
+
+    pre {
+      padding: 24px 20px;
+      font-family: var(--mono); font-size: 12.5px; line-height: 1.75;
+      overflow: auto; max-height: 580px;
+      color: #c9d1d9;
+    }
+    pre::-webkit-scrollbar { width: 6px; height: 6px; }
+    pre::-webkit-scrollbar-track { background: transparent; }
+    pre::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+    /* syntax */
+    .kw   { color: #ff7b72; }
+    .fn   { color: #d2a8ff; }
+    .str  { color: #a5d6ff; }
+    .cmt  { color: var(--subtle); font-style: italic; }
+    .num  { color: #79c0ff; }
+    .vr   { color: #ffa657; }
+
+    /* ── DIVIDER ── */
+    .section-divider {
+      height: 1px; background: linear-gradient(90deg, transparent, var(--border), transparent);
+      margin: 0 auto; max-width: 480px;
+    }
+
+    /* ── FOOTER ── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 40px 24px;
+      text-align: center;
+      color: var(--subtle); font-size: 13px;
+      position: relative; z-index: 1;
+    }
+    footer strong { color: var(--muted); }
+
+    /* ── SCROLL ANIMATIONS ── */
+    .reveal {
+      opacity: 0; transform: translateY(24px);
+      transition: opacity 600ms ease, transform 600ms ease;
+    }
+    .reveal.visible { opacity: 1; transform: translateY(0); }
+    .reveal-delay-1 { transition-delay: 80ms; }
+    .reveal-delay-2 { transition-delay: 160ms; }
+    .reveal-delay-3 { transition-delay: 240ms; }
+    .reveal-delay-4 { transition-delay: 320ms; }
+    .reveal-delay-5 { transition-delay: 400ms; }
+    .reveal-delay-6 { transition-delay: 480ms; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      nav .nav-links { display: none; }
+      .stats-strip { flex-direction: column; }
+      .stat-item { border-right: none; border-bottom: 1px solid var(--border); }
+      .stat-item:last-child { border-bottom: none; }
+      .download-card { padding: 40px 24px; }
+      h2 { font-size: 26px; }
+      section { padding: 64px 0; }
+    }
+    @media (max-width: 480px) {
+      .hero-title { letter-spacing: -0.5px; }
+      .cell-card-head { flex-wrap: wrap; }
+      .feature-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- BACKGROUND -->
+<div class="bg-canvas" aria-hidden="true">
+  <div class="orb orb-1"></div>
+  <div class="orb orb-2"></div>
+  <div class="orb orb-3"></div>
+</div>
+
+<!-- NAV -->
+<nav>
+  <a class="nav-logo" href="#">
+    <!-- HeroMark: squircle dark + $ glyph + grid lines + green dot -->
+    <svg width="30" height="30" viewBox="0 0 30 30" style="display:block;flex-shrink:0">
+      <defs>
+        <linearGradient id="nm-bg" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stop-color="#161b22"/>
+          <stop offset="100%" stop-color="#0d1117"/>
+        </linearGradient>
+        <radialGradient id="nm-hl" cx="50%" cy="0%" r="80%">
+          <stop offset="0%" stop-color="#58a6ff" stop-opacity="0.18"/>
+          <stop offset="60%" stop-color="#58a6ff" stop-opacity="0"/>
+        </radialGradient>
+        <filter id="nm-glow" x="-50%" y="-50%" width="200%" height="200%">
+          <feGaussianBlur stdDeviation="0.4" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+      </defs>
+      <rect width="30" height="30" rx="6.75" fill="url(#nm-bg)"/>
+      <rect width="30" height="30" rx="6.75" fill="url(#nm-hl)"/>
+      <rect x="0.5" y="0.5" width="29" height="29" rx="6.25" fill="none" stroke="#30363d" stroke-width="0.5" opacity="0.6"/>
+      <g transform="translate(5.7,5.7) scale(0.186)" filter="url(#nm-glow)">
+        <g stroke="#58a6ff" stroke-width="3" stroke-linecap="round" opacity="0.22">
+          <line x1="18" y1="32" x2="82" y2="32"/>
+          <line x1="18" y1="50" x2="82" y2="50"/>
+          <line x1="18" y1="68" x2="82" y2="68"/>
+        </g>
+        <g fill="none" stroke="#58a6ff" stroke-width="7.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M 64 28 C 64 21, 54 19, 47 19 C 38 19, 32 23, 32 30 C 32 37, 38 39, 47 41 C 56 43, 64 45, 64 53 C 64 60, 56 64, 47 64 C 38 64, 30 60, 30 53"/>
+          <line x1="47" y1="13" x2="47" y2="70" stroke-width="6"/>
+        </g>
+        <circle cx="76" cy="24" r="3.2" fill="#3fb950"/>
+      </g>
+    </svg>
+    Hero
+  </a>
+  <div class="nav-links">
+    <a href="#funcionalidades">Funcionalidades</a>
+    <a href="#como-funciona">Como usar</a>
+    <a href="#configuracao">Manual</a>
+    <a href="#script">Script</a>
+  </div>
+  <a href="https://expo.dev/accounts/sousa1324/projects/finance-mobile-1/builds/53222064-8fbc-4249-a2db-95572774cdc8" target="_blank" class="nav-cta">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Baixar APK
+  </a>
+</nav>
+
+<!-- HERO -->
+<section id="hero">
+  <div class="container" style="text-align:center;">
+    <div class="hero-badge reveal">
+      <span class="hero-badge-dot"></span>
+      Funciona com o seu Google Sheets
+    </div>
+    <h1 class="hero-title reveal reveal-delay-1">
+      <span>Controle total<br>das suas finanças</span>
+    </h1>
+    <p class="hero-sub reveal reveal-delay-2">
+      Um app Android que conecta direto na sua planilha. Registre gastos, gerencie parcelas e simule seu saldo futuro — tudo em tempo real.
+    </p>
+    <div class="hero-actions reveal reveal-delay-3">
+      <a href="https://expo.dev/accounts/sousa1324/projects/finance-mobile-1/builds/53222064-8fbc-4249-a2db-95572774cdc8" target="_blank" class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Baixar APK — Android
+      </a>
+      <a href="#script" class="btn-outline">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+        Ver código do script
+      </a>
+    </div>
+    <p class="hero-note reveal reveal-delay-4">Android 6.0+ &nbsp;·&nbsp; Gratuito &nbsp;·&nbsp; Sem assinatura</p>
+
+    <div class="stats-strip reveal reveal-delay-5">
+      <div class="stat-item">
+        <div class="stat-num" data-count="6">0</div>
+        <div class="stat-label">Telas no app</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num" data-count="11">0</div>
+        <div class="stat-label">Ações no script</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num" data-count="7">0</div>
+        <div class="stat-label">Campos configuráveis</div>
+      </div>
+      <div class="stat-item">
+        <div class="stat-num" style="color:var(--green)">R$</div>
+        <div class="stat-label">100% gratuito</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- FUNCIONALIDADES -->
+<section id="funcionalidades">
+  <div class="container">
+    <div class="reveal">
+      <p class="section-label">Funcionalidades</p>
+      <h2>Tudo que você precisa</h2>
+      <p class="section-desc">Simples de configurar, poderoso no dia a dia. O app conversa direto com sua planilha Google Sheets.</p>
+    </div>
+    <div class="feature-grid">
+      <div class="feature-card reveal reveal-delay-1">
+        <div class="feature-icon-wrap icon-blue">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+        </div>
+        <h3>Saldo em tempo real</h3>
+        <p>Veja quanto você tem disponível agora, lido diretamente da célula configurada na sua planilha.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-2">
+        <div class="feature-icon-wrap icon-green">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+        </div>
+        <h3>Registrar despesas</h3>
+        <p>Adicione gastos em segundos. O valor é somado na planilha e o saldo atualiza instantaneamente.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-3">
+        <div class="feature-icon-wrap icon-red">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 .49-3.5"/></svg>
+        </div>
+        <h3>Reembolso</h3>
+        <p>Gastou por engano? Reverta qualquer despesa do histórico com um toque e a planilha é atualizada.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-4">
+        <div class="feature-icon-wrap icon-yellow">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+        </div>
+        <h3>Parcelas inteligentes</h3>
+        <p>O app sabe quando a fatura fecha e envia a parcela para o mês correto automaticamente.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-5">
+        <div class="feature-icon-wrap icon-purple">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        </div>
+        <h3>Simular saldo futuro</h3>
+        <p>Saiba quanto terá no próximo mês após descontar custos fixos e todas as parcelas pendentes.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-6">
+        <div class="feature-icon-wrap icon-teal">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        </div>
+        <h3>Histórico completo</h3>
+        <p>Todas as despesas ficam salvas localmente e sincronizadas na aba "Historico" da planilha.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- COMO FUNCIONA -->
+<section id="como-funciona">
+  <div class="container">
+    <div class="reveal">
+      <p class="section-label">Como usar</p>
+      <h2>Configure uma vez, use para sempre</h2>
+      <p class="section-desc">Quatro passos simples para ligar o app à sua planilha Google Sheets.</p>
+    </div>
+    <div class="steps-list">
+      <div class="step reveal reveal-delay-1">
+        <div class="step-left">
+          <div class="step-num">1</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-body">
+          <h3>Copie o Google Apps Script</h3>
+          <p>Acesse <a href="https://script.google.com" target="_blank">script.google.com</a>, crie um novo projeto e cole o código disponível nesta página. Ele funciona como uma ponte segura entre o app e a sua planilha — sem servidor próprio, sem custo.</p>
+          <div class="step-chip">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+            Seção "Script" abaixo tem o código completo
+          </div>
+        </div>
+      </div>
+      <div class="step reveal reveal-delay-2">
+        <div class="step-left">
+          <div class="step-num">2</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-body">
+          <h3>Publique como App da Web</h3>
+          <p>No editor do script, clique em <strong>Implantar → Nova implantação</strong>. Escolha o tipo <strong>App da Web</strong>, execute como <strong>Você</strong> e defina acesso para <strong>Qualquer pessoa</strong>. Autorize as permissões e copie a URL gerada.</p>
+        </div>
+      </div>
+      <div class="step reveal reveal-delay-3">
+        <div class="step-left">
+          <div class="step-num">3</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-body">
+          <h3>Configure o app</h3>
+          <p>Na primeira abertura, cole a URL do script e o link da sua planilha Google Sheets. Depois informe quais células correspondem ao saldo (ex: <code>F9</code>) e ao campo de gastos (ex: <code>I8</code>). Opcionalmente configure parcelas e simulação.</p>
+        </div>
+      </div>
+      <div class="step reveal reveal-delay-4">
+        <div class="step-left">
+          <div class="step-num">4</div>
+          <div class="step-line"></div>
+        </div>
+        <div class="step-body">
+          <h3>Pronto — use no dia a dia</h3>
+          <p>O app lê e escreve diretamente na sua planilha. Tudo que você registrar aparece na planilha em segundos. Seu saldo está sempre atualizado.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- MANUAL DE CONFIGURAÇÃO -->
+<section id="configuracao">
+  <div class="container">
+    <div class="reveal">
+      <p class="section-label">Manual</p>
+      <h2>Configuração de células</h2>
+      <p class="section-desc">Cada campo do app corresponde a uma célula da sua planilha. Entenda o que cada um faz.</p>
+    </div>
+    <div class="manual-list">
+
+      <!-- cellSaldo -->
+      <div class="cell-card reveal">
+        <div class="cell-card-head">
+          <span class="cell-tag cell-tag-req">cellSaldo</span>
+          <span class="badge badge-req">Obrigatório</span>
+          <h3>Célula do Saldo Disponível</h3>
+        </div>
+        <div class="cell-card-body">
+          <p>Célula que contém o <strong>saldo calculado pela sua planilha</strong> — normalmente uma fórmula do tipo <code>=Salário - Gastos</code>. O app <em>apenas lê</em> este valor, nunca escreve nela.</p>
+          <p>Sempre que você abre o app ou clica em atualizar, o valor desta célula é exibido na tela principal.</p>
+          <div class="example-tag">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Exemplo: F9
+          </div>
+        </div>
+      </div>
+
+      <!-- cellGasto -->
+      <div class="cell-card reveal">
+        <div class="cell-card-head">
+          <span class="cell-tag cell-tag-req">cellGasto</span>
+          <span class="badge badge-req">Obrigatório</span>
+          <h3>Célula de Gastos Acumulados</h3>
+        </div>
+        <div class="cell-card-body">
+          <p>Célula onde o app <strong>acumula os gastos registrados</strong>. A cada despesa adicionada, o valor é somado ao que já está nesta célula. Ao fazer um reembolso, o valor é subtraído.</p>
+          <p>Sua planilha deve usar esta célula em uma fórmula para que o saldo (cellSaldo) seja recalculado automaticamente após cada lançamento.</p>
+          <div class="example-tag">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Exemplo: I8
+          </div>
+          <div class="tip">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" color="#58a6ff"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <p>Certifique-se de que esta célula começa com <strong>0</strong> no início de cada mês. O app não faz reset automático — isso deve ser controlado pela sua planilha.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- cellParcelasStart -->
+      <div class="cell-card reveal">
+        <div class="cell-card-head">
+          <span class="cell-tag cell-tag-opt">cellParcelasStart</span>
+          <span class="badge badge-opt">Opcional</span>
+          <h3>Célula Inicial das Parcelas</h3>
+        </div>
+        <div class="cell-card-body">
+          <p>A <strong>primeira célula da coluna "Restantes"</strong> na sua tabela de parcelas. A partir dessa referência, o app lê automaticamente as 3 colunas vizinhas obrigatórias:</p>
+
+          <div class="sheet-demo">
+            <div class="sheet-demo-bar">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+              Estrutura obrigatória na planilha
+            </div>
+            <table class="sheet-table">
+              <thead>
+                <tr><th></th><th>K</th><th>L</th><th>M</th></tr>
+              </thead>
+              <tbody>
+                <tr><td>4</td><td class="tc-label">Restantes</td><td class="tc-label">Produto</td><td class="tc-label">Valor</td></tr>
+                <tr><td>5</td><td class="tc-blue">3</td><td>Notebook</td><td class="tc-green">R$ 350,00</td></tr>
+                <tr><td>6</td><td class="tc-blue">6</td><td>Celular</td><td class="tc-green">R$ 200,00</td></tr>
+                <tr><td>7</td><td class="tc-blue">1</td><td>Fone</td><td class="tc-green">R$ 80,00</td></tr>
+              </tbody>
+            </table>
+          </div>
+
+          <p style="margin-top:14px;">No exemplo acima, configure <strong>K5</strong> — a primeira linha de dados da coluna "Restantes" (excluindo o cabeçalho).</p>
+          <div class="example-tag">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Exemplo: K5
+          </div>
+          <div class="warn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" color="#d4a017"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <p>Se configurar esta célula, o campo <strong>Dia de Fechamento</strong> torna-se obrigatório.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- diaFechamento -->
+      <div class="cell-card reveal">
+        <div class="cell-card-head">
+          <span class="cell-tag cell-tag-opt">diaFechamento</span>
+          <span class="badge badge-opt">Opcional*</span>
+          <h3>Dia de Fechamento do Cartão</h3>
+        </div>
+        <div class="cell-card-body">
+          <p>O dia do mês em que a fatura do seu cartão <strong>fecha</strong> (aceita 1 a 28). Este campo controla toda a lógica de parcelas do app:</p>
+          <p><strong>Antes do fechamento</strong> — parcelas vão direto para a planilha (entram neste mês)</p>
+          <p><strong>A partir do fechamento</strong> — parcelas ficam guardadas no app e são enviadas à planilha automaticamente no início do mês seguinte</p>
+          <div class="example-tag">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+            Exemplo: 10 (fatura fecha todo dia 10)
+          </div>
+          <div class="tip">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" color="#58a6ff"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <p>Parcelas do "próximo mês" aparecem destacadas em amarelo na aba de Parcelas e são promovidas automaticamente quando você abre o app no mês seguinte.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- cellCustoFixo -->
+      <div class="cell-card reveal">
+        <div class="cell-card-head">
+          <span class="cell-tag cell-tag-opt">cellCustoFixo</span>
+          <span class="badge badge-opt">Opcional</span>
+          <h3>Célula dos Custos Fixos</h3>
+        </div>
+        <div class="cell-card-body">
+          <p>Célula com o <strong>total dos seus gastos fixos mensais</strong> (aluguel, streaming, academia, etc.). Usada exclusivamente pelo botão <strong>"Simular saldo que vem"</strong> na tela inicial.</p>
+          <p>O valor desta célula é descontado do salário na simulação, junto com as parcelas pendentes do próximo mês.</p>
+          <div class="example-tag">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Exemplo: D20
+          </div>
+        </div>
+      </div>
+
+      <!-- cellSalario / salarioManual -->
+      <div class="cell-card reveal">
+        <div class="cell-card-head">
+          <span class="cell-tag cell-tag-opt">cellSalario</span>
+          <span class="cell-tag cell-tag-opt" style="margin-left:0">salarioManual</span>
+          <span class="badge badge-opt">Opcional</span>
+          <h3>Salário / Capital</h3>
+        </div>
+        <div class="cell-card-body">
+          <p><strong>cellSalario</strong> — Célula da planilha com seu salário ou capital mensal. Opção recomendada: se o valor mudar na planilha, a simulação reflete automaticamente.</p>
+          <div class="example-tag">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Exemplo: B2
+          </div>
+          <p style="margin-top:14px;"><strong>salarioManual</strong> — Alternativa: um valor fixo digitado diretamente no app, caso seu salário não esteja em uma célula específica. Só é usado se <strong>cellSalario</strong> estiver vazia.</p>
+          <div class="example-tag">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Exemplo: 3500,00
+          </div>
+          <div class="warn">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" color="#d4a017"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            <p>Salário manual pode ficar desatualizado se o capital mudar na planilha. Prefira usar <strong>cellSalario</strong>.</p>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- DOWNLOAD -->
+<section id="download">
+  <div class="container">
+    <div class="download-card reveal">
+      <div class="download-icon">
+        <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>
+      </div>
+      <h3>Baixar o App</h3>
+      <p>Instale diretamente no seu Android. Antes de instalar, habilite <strong>"Fontes desconhecidas"</strong> em Configurações → Segurança.</p>
+      <a href="https://expo.dev/accounts/sousa1324/projects/finance-mobile-1/builds/53222064-8fbc-4249-a2db-95572774cdc8" target="_blank" class="btn-download">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Baixar APK — Android
+      </a>
+      <p class="download-meta">Android 6.0+ &nbsp;·&nbsp; Gratuito &nbsp;·&nbsp; Sem dados coletados</p>
+    </div>
+  </div>
+</section>
+
+<div class="section-divider"></div>
+
+<!-- SCRIPT -->
+<section id="script">
+  <div class="container">
+    <div class="reveal">
+      <p class="section-label">Backend</p>
+      <h2>Google Apps Script</h2>
+      <p class="section-desc">Cole este código em <a href="https://script.google.com" target="_blank">script.google.com</a> e publique como App da Web. Ele é o backend do app.</p>
+    </div>
+
+    <div class="deploy-list reveal">
+      <div class="deploy-item">
+        <div class="deploy-num">1</div>
+        <p>Acesse <strong><a href="https://script.google.com" target="_blank">script.google.com</a></strong> e clique em <strong>Novo projeto</strong>.</p>
+      </div>
+      <div class="deploy-item">
+        <div class="deploy-num">2</div>
+        <p>Apague todo o código existente e cole o código abaixo.</p>
+      </div>
+      <div class="deploy-item">
+        <div class="deploy-num">3</div>
+        <p>Clique em <strong>Implantar → Nova implantação</strong>. Tipo: <code>App da Web</code>. Executar como: <code>Eu</code>. Acesso: <code>Qualquer pessoa</code>. Clique em Implantar e autorize.</p>
+      </div>
+      <div class="deploy-item">
+        <div class="deploy-num">4</div>
+        <p>Copie a <strong>URL gerada</strong> e cole na tela de configuração do app.</p>
+      </div>
+      <div class="deploy-item">
+        <div class="deploy-num">5</div>
+        <p>Ao atualizar o código, sempre clique em <strong>Implantar → Gerenciar implantações → Editar → Nova versão</strong> para que as mudanças entrem em vigor.</p>
+      </div>
+    </div>
+
+    <div class="code-box reveal">
+      <div class="code-bar">
+        <div class="code-bar-left">
+          <div class="traffic-lights">
+            <div class="tl tl-r"></div>
+            <div class="tl tl-y"></div>
+            <div class="tl tl-g"></div>
+          </div>
+          <span class="code-fname">Code.gs</span>
+        </div>
+        <button class="copy-btn" onclick="copyCode(this)" aria-label="Copiar código">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <span class="copy-label">Copiar código</span>
+        </button>
+      </div>
+<pre id="code-block"><span class="cmt">// Google Apps Script — Hero Backend (Standalone / Universal)
+//
+// COMO PUBLICAR:
+//  1. Acesse script.google.com e crie um novo projeto
+//  2. Apague tudo e cole este código
+//  3. Clique em "Implantar" → "Nova implantação"
+//  4. Tipo: "App da Web"
+//     • Executar como: Eu (seu e-mail)
+//     • Quem tem acesso: Qualquer pessoa
+//  5. Clique em "Implantar" e autorize as permissões
+//  6. Copie a URL gerada e cole no app</span>
+
+<span class="kw">function</span> <span class="fn">getSheet</span>(spreadsheetId) {
+  <span class="kw">var</span> <span class="vr">ss</span> = SpreadsheetApp.openById(spreadsheetId);
+  <span class="kw">if</span> (!ss) <span class="kw">throw new</span> Error(<span class="str">"Planilha não encontrada. Verifique o link informado."</span>);
+  <span class="kw">var</span> <span class="vr">sheet</span> = ss.getSheets()[<span class="num">0</span>];
+  <span class="kw">if</span> (!sheet) <span class="kw">throw new</span> Error(<span class="str">"Nenhuma aba encontrada na planilha."</span>);
+  <span class="kw">return</span> sheet;
+}
+
+<span class="kw">function</span> <span class="fn">doGet</span>(e) {
+  <span class="kw">try</span> {
+    <span class="kw">var</span> <span class="vr">action</span>        = (e &amp;&amp; e.parameter &amp;&amp; e.parameter.action)        || <span class="str">""</span>;
+    <span class="kw">var</span> <span class="vr">spreadsheetId</span> = (e &amp;&amp; e.parameter &amp;&amp; e.parameter.spreadsheetId) || <span class="str">""</span>;
+    <span class="kw">var</span> <span class="vr">cellSaldo</span>     = (e &amp;&amp; e.parameter &amp;&amp; e.parameter.cellSaldo)     || <span class="str">"F9"</span>;
+
+    <span class="kw">if</span> (action === <span class="str">"ping"</span>) {
+      <span class="kw">if</span> (!spreadsheetId) <span class="kw">throw new</span> Error(<span class="str">"spreadsheetId não informado."</span>);
+      <span class="kw">var</span> <span class="vr">ss</span> = SpreadsheetApp.openById(spreadsheetId);
+      <span class="kw">return</span> ContentService
+        .createTextOutput(JSON.stringify({ ok: <span class="kw">true</span>, title: ss.getName() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    <span class="kw">if</span> (action === <span class="str">"getSaldo"</span>) {
+      <span class="kw">if</span> (!spreadsheetId) <span class="kw">throw new</span> Error(<span class="str">"spreadsheetId não informado."</span>);
+      <span class="kw">var</span> <span class="vr">sheet</span> = <span class="fn">getSheet</span>(spreadsheetId);
+      <span class="kw">var</span> <span class="vr">saldo</span> = sheet.getRange(cellSaldo).getValue();
+      <span class="kw">return</span> ContentService
+        .createTextOutput(JSON.stringify({ saldo: saldo }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    <span class="kw">if</span> (action === <span class="str">"getInstallments"</span>) {
+      <span class="kw">var</span> <span class="vr">cellParcelasStart</span> = (e &amp;&amp; e.parameter &amp;&amp; e.parameter.cellParcelasStart) || <span class="str">""</span>;
+      <span class="kw">if</span> (!spreadsheetId) <span class="kw">throw new</span> Error(<span class="str">"spreadsheetId não informado."</span>);
+      <span class="kw">if</span> (!cellParcelasStart) <span class="kw">throw new</span> Error(<span class="str">"Célula inicial de parcelas não configurada."</span>);
+      <span class="kw">var</span> <span class="vr">sheet</span>      = <span class="fn">getSheet</span>(spreadsheetId);
+      <span class="kw">var</span> <span class="vr">startRange</span> = sheet.getRange(cellParcelasStart);
+      <span class="kw">var</span> <span class="vr">startRow</span>   = startRange.getRow();
+      <span class="kw">var</span> <span class="vr">startCol</span>   = startRange.getColumn();
+      <span class="kw">var</span> <span class="vr">data</span>         = sheet.getRange(startRow, startCol, <span class="num">100</span>, <span class="num">3</span>).getValues();
+      <span class="kw">var</span> <span class="vr">installments</span> = [];
+      <span class="kw">for</span> (<span class="kw">var</span> <span class="vr">i</span> = <span class="num">0</span>; i &lt; data.length; i++) {
+        <span class="kw">var</span> <span class="vr">row</span> = data[i];
+        <span class="kw">if</span> (row[<span class="num">0</span>] !== <span class="str">""</span> || row[<span class="num">1</span>] !== <span class="str">""</span> || row[<span class="num">2</span>] !== <span class="str">""</span>) {
+          installments.push({
+            rowIndex: startRow + i,
+            restantes: parseInt(row[<span class="num">0</span>]) || <span class="num">0</span>,
+            nome: row[<span class="num">1</span>],
+            valor: parseFloat(String(row[<span class="num">2</span>]).replace(<span class="str">','</span>, <span class="str">'.'</span>)) || <span class="num">0</span>
+          });
+        }
+      }
+      <span class="kw">return</span> ContentService
+        .createTextOutput(JSON.stringify({ installments: installments }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    <span class="kw">if</span> (action === <span class="str">"getHistorico"</span>) {
+      <span class="kw">if</span> (!spreadsheetId) <span class="kw">throw new</span> Error(<span class="str">"spreadsheetId não informado."</span>);
+      <span class="kw">var</span> <span class="vr">ss</span>    = SpreadsheetApp.openById(spreadsheetId);
+      <span class="kw">var</span> <span class="vr">sheet</span> = ss.getSheetByName(<span class="str">"Historico"</span>);
+      <span class="kw">if</span> (!sheet || sheet.getLastRow() &lt; <span class="num">2</span>) {
+        <span class="kw">return</span> ContentService
+          .createTextOutput(JSON.stringify({ historico: [] }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      <span class="kw">var</span> <span class="vr">rows</span>     = sheet.getRange(<span class="num">2</span>, <span class="num">1</span>, sheet.getLastRow() - <span class="num">1</span>, <span class="num">4</span>).getValues();
+      <span class="kw">var</span> <span class="vr">historico</span> = rows.map(<span class="kw">function</span>(r) {
+        <span class="kw">return</span> { id: String(r[<span class="num">0</span>]), nome: String(r[<span class="num">1</span>]), valor: Number(r[<span class="num">2</span>]), data: String(r[<span class="num">3</span>]) };
+      });
+      <span class="kw">return</span> ContentService
+        .createTextOutput(JSON.stringify({ historico: historico }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    <span class="kw">return</span> ContentService
+      .createTextOutput(JSON.stringify({ error: <span class="str">"Ação desconhecida: "</span> + action }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } <span class="kw">catch</span> (err) {
+    <span class="kw">return</span> ContentService
+      .createTextOutput(JSON.stringify({ error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+<span class="kw">function</span> <span class="fn">doPost</span>(e) {
+  <span class="kw">try</span> {
+    <span class="kw">var</span> <span class="vr">body</span>          = JSON.parse(e.postData.contents);
+    <span class="kw">var</span> <span class="vr">spreadsheetId</span> = body.spreadsheetId || <span class="str">""</span>;
+    <span class="kw">var</span> <span class="vr">cellGasto</span>     = body.cellGasto      || <span class="str">"I8"</span>;
+    <span class="kw">var</span> <span class="vr">cellSaldo</span>     = body.cellSaldo      || <span class="str">"F9"</span>;
+
+    <span class="kw">if</span> (!spreadsheetId) <span class="kw">throw new</span> Error(<span class="str">"spreadsheetId não informado."</span>);
+
+    <span class="kw">if</span> (body.action === <span class="str">"addExpense"</span>) {
+      <span class="kw">var</span> <span class="vr">sheet</span>      = <span class="fn">getSheet</span>(spreadsheetId);
+      <span class="kw">var</span> <span class="vr">valor</span>      = parseFloat(body.valor);
+      <span class="kw">var</span> <span class="vr">gastoAtual</span> = parseFloat(sheet.getRange(cellGasto).getValue()) || <span class="num">0</span>;
+      sheet.getRange(cellGasto).setValue(gastoAtual + valor);
+      SpreadsheetApp.flush(); Utilities.sleep(<span class="num">1500</span>);
+      <span class="kw">return</span> ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    <span class="kw">if</span> (body.action === <span class="str">"subtractExpense"</span>) {
+      <span class="kw">var</span> <span class="vr">sheet</span>      = <span class="fn">getSheet</span>(spreadsheetId);
+      <span class="kw">var</span> <span class="vr">valor</span>      = parseFloat(body.valor);
+      <span class="kw">var</span> <span class="vr">gastoAtual</span> = parseFloat(sheet.getRange(cellGasto).getValue()) || <span class="num">0</span>;
+      sheet.getRange(cellGasto).setValue(Math.max(<span class="num">0</span>, gastoAtual - valor));
+      SpreadsheetApp.flush(); Utilities.sleep(<span class="num">1500</span>);
+      <span class="kw">return</span> ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    <span class="kw">if</span> (body.action === <span class="str">"addInstallment"</span>) {
+      <span class="kw">var</span> <span class="vr">sheet</span>      = <span class="fn">getSheet</span>(spreadsheetId);
+      <span class="kw">var</span> <span class="vr">startRange</span> = sheet.getRange(body.cellParcelasStart);
+      <span class="kw">var</span> <span class="vr">startRow</span>   = startRange.getRow();
+      <span class="kw">var</span> <span class="vr">startCol</span>   = startRange.getColumn();
+      <span class="kw">var</span> <span class="vr">data</span>       = sheet.getRange(startRow, startCol, <span class="num">100</span>, <span class="num">3</span>).getValues();
+      <span class="kw">var</span> <span class="vr">target</span>     = startRow + <span class="num">99</span>;
+      <span class="kw">for</span> (<span class="kw">var</span> <span class="vr">i</span> = <span class="num">0</span>; i &lt; data.length; i++) {
+        <span class="kw">if</span> (data[i][<span class="num">0</span>] === <span class="str">""</span> &amp;&amp; data[i][<span class="num">1</span>] === <span class="str">""</span> &amp;&amp; data[i][<span class="num">2</span>] === <span class="str">""</span>) { target = startRow + i; <span class="kw">break</span>; }
+      }
+      sheet.getRange(target, startCol, <span class="num">1</span>, <span class="num">3</span>).setValues([[body.restantes, body.nome, body.valor]]);
+      <span class="kw">return</span> ContentService.createTextOutput(JSON.stringify({ ok: <span class="kw">true</span> })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    <span class="kw">if</span> (body.action === <span class="str">"deleteInstallment"</span>) {
+      <span class="kw">var</span> <span class="vr">sheet</span>    = <span class="fn">getSheet</span>(spreadsheetId);
+      <span class="kw">var</span> <span class="vr">startCol</span> = sheet.getRange(body.cellParcelasStart).getColumn();
+      sheet.getRange(parseInt(body.rowIndex), startCol, <span class="num">1</span>, <span class="num">3</span>).clearContent();
+      <span class="kw">return</span> ContentService.createTextOutput(JSON.stringify({ ok: <span class="kw">true</span> })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    <span class="kw">if</span> (body.action === <span class="str">"payInstallment"</span>) {
+      <span class="kw">var</span> <span class="vr">sheet</span>    = <span class="fn">getSheet</span>(spreadsheetId);
+      <span class="kw">var</span> <span class="vr">startCol</span> = sheet.getRange(body.cellParcelasStart).getColumn();
+      <span class="kw">var</span> <span class="vr">cell</span>     = sheet.getRange(parseInt(body.rowIndex), startCol);
+      <span class="kw">var</span> <span class="vr">rem</span>      = Math.max(<span class="num">0</span>, (parseInt(cell.getValue()) || <span class="num">0</span>) - <span class="num">1</span>);
+      <span class="kw">if</span> (rem === <span class="num">0</span>) { sheet.getRange(parseInt(body.rowIndex), startCol, <span class="num">1</span>, <span class="num">3</span>).clearContent(); }
+      <span class="kw">else</span> { cell.setValue(rem); }
+      <span class="kw">return</span> ContentService.createTextOutput(JSON.stringify({ remaining: rem })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    <span class="kw">if</span> (body.action === <span class="str">"payAllInstallments"</span>) {
+      <span class="kw">var</span> <span class="vr">sheet</span>     = <span class="fn">getSheet</span>(spreadsheetId);
+      <span class="kw">var</span> <span class="vr">startRange</span> = sheet.getRange(body.cellParcelasStart);
+      <span class="kw">var</span> <span class="vr">startRow</span>   = startRange.getRow();
+      <span class="kw">var</span> <span class="vr">startCol</span>   = startRange.getColumn();
+      <span class="kw">var</span> <span class="vr">range</span>     = sheet.getRange(startRow, startCol, <span class="num">100</span>, <span class="num">3</span>);
+      <span class="kw">var</span> <span class="vr">data</span>      = range.getValues();
+      <span class="kw">for</span> (<span class="kw">var</span> <span class="vr">i</span> = <span class="num">0</span>; i &lt; data.length; i++) {
+        <span class="kw">var</span> <span class="vr">row</span> = data[i];
+        <span class="kw">if</span> (row[<span class="num">0</span>] !== <span class="str">""</span> || row[<span class="num">1</span>] !== <span class="str">""</span> || row[<span class="num">2</span>] !== <span class="str">""</span>) {
+          <span class="kw">var</span> <span class="vr">r</span> = (parseInt(row[<span class="num">0</span>]) || <span class="num">0</span>) - <span class="num">1</span>;
+          data[i] = r &lt;= <span class="num">0</span> ? [<span class="str">""</span>, <span class="str">""</span>, <span class="str">""</span>] : [r, row[<span class="num">1</span>], row[<span class="num">2</span>]];
+        }
+      }
+      range.setValues(data);
+      <span class="kw">return</span> ContentService.createTextOutput(JSON.stringify({ ok: <span class="kw">true</span> })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    <span class="kw">if</span> (body.action === <span class="str">"zeroCellGasto"</span>) {
+      <span class="kw">var</span> <span class="vr">sheet</span> = <span class="fn">getSheet</span>(spreadsheetId);
+      sheet.getRange(cellGasto).setValue(<span class="num">0</span>);
+      SpreadsheetApp.flush(); Utilities.sleep(<span class="num">1500</span>);
+      <span class="kw">return</span> ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    <span class="kw">if</span> (body.action === <span class="str">"syncHistorico"</span>) {
+      <span class="kw">var</span> <span class="vr">ss</span>       = SpreadsheetApp.openById(spreadsheetId);
+      <span class="kw">var</span> <span class="vr">sheet</span>    = ss.getSheetByName(<span class="str">"Historico"</span>) || ss.insertSheet(<span class="str">"Historico"</span>);
+      sheet.clearContents();
+      sheet.appendRow([<span class="str">"id"</span>, <span class="str">"nome"</span>, <span class="str">"valor"</span>, <span class="str">"data"</span>]);
+      <span class="kw">var</span> <span class="vr">historico</span> = body.historico || [];
+      <span class="kw">if</span> (historico.length > <span class="num">0</span>) {
+        sheet.getRange(<span class="num">2</span>, <span class="num">1</span>, historico.length, <span class="num">4</span>).setValues(
+          historico.map(<span class="kw">function</span>(d) { <span class="kw">return</span> [d.id, d.nome, d.valor, d.data]; })
+        );
+      }
+      <span class="kw">return</span> ContentService.createTextOutput(JSON.stringify({ ok: <span class="kw">true</span> })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    <span class="kw">return</span> ContentService
+      .createTextOutput(JSON.stringify({ error: <span class="str">"Ação desconhecida"</span> }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } <span class="kw">catch</span> (err) {
+    <span class="kw">return</span> ContentService
+      .createTextOutput(JSON.stringify({ error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}</pre>
+    </div>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <p><strong>Hero</strong> — App de controle financeiro pessoal</p>
+  <p style="margin-top:8px;">Desenvolvido com React Native + Expo &nbsp;·&nbsp; Backend via Google Apps Script</p>
+</footer>
+
+<script>
+  /* ── SCROLL REVEAL ── */
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => { if (e.isIntersecting) { e.target.classList.add('visible'); } });
+  }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+  document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+  /* ── COUNTER ANIMATION ── */
+  function animateCounter(el, target) {
+    let current = 0;
+    const step = target / 30;
+    const timer = setInterval(() => {
+      current = Math.min(current + step, target);
+      el.textContent = Math.round(current);
+      if (current >= target) clearInterval(timer);
+    }, 30);
+  }
+  const counterObserver = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const target = parseInt(e.target.dataset.count);
+        if (!isNaN(target)) animateCounter(e.target, target);
+        counterObserver.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.5 });
+  document.querySelectorAll('[data-count]').forEach(el => counterObserver.observe(el));
+
+  /* ── COPY CODE ── */
+  const CODE_GS_RAW = `// Google Apps Script — Hero Backend (Standalone / Universal)
+//
+// COMO PUBLICAR:
+//  1. Acesse script.google.com e crie um novo projeto
+//  2. Apague tudo e cole este código
+//  3. Clique em "Implantar" → "Nova implantação"
+//  4. Tipo: "App da Web"
+//     • Executar como: Eu (seu e-mail)
+//     • Quem tem acesso: Qualquer pessoa
+//  5. Clique em "Implantar" e autorize as permissões
+//  6. Copie a URL gerada e cole no app
+
+function getSheet(spreadsheetId) {
+  var ss = SpreadsheetApp.openById(spreadsheetId);
+  if (!ss) throw new Error("Planilha não encontrada. Verifique o link informado.");
+  var sheet = ss.getSheets()[0];
+  if (!sheet) throw new Error("Nenhuma aba encontrada na planilha.");
+  return sheet;
+}
+
+function doGet(e) {
+  try {
+    var action          = (e && e.parameter && e.parameter.action)          || "";
+    var spreadsheetId   = (e && e.parameter && e.parameter.spreadsheetId)   || "";
+    var cellSaldo       = (e && e.parameter && e.parameter.cellSaldo)       || "F9";
+
+    if (action === "ping") {
+      if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true, title: ss.getName() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === "getSaldo") {
+      if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
+      var sheet = getSheet(spreadsheetId);
+      var saldo = sheet.getRange(cellSaldo).getValue();
+      return ContentService
+        .createTextOutput(JSON.stringify({ saldo: saldo }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === "getInstallments") {
+      var cellParcelasStart = (e && e.parameter && e.parameter.cellParcelasStart) || "";
+      if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
+      if (!cellParcelasStart) throw new Error("Célula inicial de parcelas não configurada.");
+      var sheet = getSheet(spreadsheetId);
+      var startRange = sheet.getRange(cellParcelasStart);
+      var startRow = startRange.getRow();
+      var startCol = startRange.getColumn();
+      var data = sheet.getRange(startRow, startCol, 100, 3).getValues();
+      var installments = [];
+      for (var i = 0; i < data.length; i++) {
+        var row = data[i];
+        if (row[0] !== "" || row[1] !== "" || row[2] !== "") {
+          installments.push({
+            rowIndex: startRow + i,
+            restantes: parseInt(row[0]) || 0,
+            nome: row[1],
+            valor: parseFloat(String(row[2]).replace(',', '.')) || 0
+          });
+        }
+      }
+      return ContentService
+        .createTextOutput(JSON.stringify({ installments: installments }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === "getHistorico") {
+      if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ss.getSheetByName("Historico");
+      if (!sheet || sheet.getLastRow() < 2) {
+        return ContentService
+          .createTextOutput(JSON.stringify({ historico: [] }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
+      var historico = rows.map(function(r) {
+        return { id: String(r[0]), nome: String(r[1]), valor: Number(r[2]), data: String(r[3]) };
+      });
+      return ContentService
+        .createTextOutput(JSON.stringify({ historico: historico }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ error: "Ação desconhecida: " + action }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function doPost(e) {
+  try {
+    var body            = JSON.parse(e.postData.contents);
+    var spreadsheetId   = body.spreadsheetId || "";
+    var cellGasto       = body.cellGasto      || "I8";
+    var cellSaldo       = body.cellSaldo      || "F9";
+
+    if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
+
+    if (body.action === "addExpense") {
+      var sheet      = getSheet(spreadsheetId);
+      var valor      = parseFloat(body.valor);
+      var gastoAtual = parseFloat(sheet.getRange(cellGasto).getValue()) || 0;
+      sheet.getRange(cellGasto).setValue(gastoAtual + valor);
+      SpreadsheetApp.flush(); Utilities.sleep(1500);
+      return ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "subtractExpense") {
+      var sheet      = getSheet(spreadsheetId);
+      var valor      = parseFloat(body.valor);
+      var gastoAtual = parseFloat(sheet.getRange(cellGasto).getValue()) || 0;
+      sheet.getRange(cellGasto).setValue(Math.max(0, gastoAtual - valor));
+      SpreadsheetApp.flush(); Utilities.sleep(1500);
+      return ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "addInstallment") {
+      var sheet = getSheet(spreadsheetId);
+      var startRange = sheet.getRange(body.cellParcelasStart);
+      var startRow = startRange.getRow();
+      var startCol = startRange.getColumn();
+      var data = sheet.getRange(startRow, startCol, 100, 3).getValues();
+      var target = startRow + 99;
+      for (var i = 0; i < data.length; i++) {
+        if (data[i][0] === "" && data[i][1] === "" && data[i][2] === "") { target = startRow + i; break; }
+      }
+      sheet.getRange(target, startCol, 1, 3).setValues([[body.restantes, body.nome, body.valor]]);
+      return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "deleteInstallment") {
+      var sheet = getSheet(spreadsheetId);
+      var startCol = sheet.getRange(body.cellParcelasStart).getColumn();
+      sheet.getRange(parseInt(body.rowIndex), startCol, 1, 3).clearContent();
+      return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "payInstallment") {
+      var sheet = getSheet(spreadsheetId);
+      var startCol = sheet.getRange(body.cellParcelasStart).getColumn();
+      var cell = sheet.getRange(parseInt(body.rowIndex), startCol);
+      var rem = Math.max(0, (parseInt(cell.getValue()) || 0) - 1);
+      if (rem === 0) { sheet.getRange(parseInt(body.rowIndex), startCol, 1, 3).clearContent(); }
+      else { cell.setValue(rem); }
+      return ContentService.createTextOutput(JSON.stringify({ remaining: rem })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "payAllInstallments") {
+      var sheet = getSheet(spreadsheetId);
+      var startRange = sheet.getRange(body.cellParcelasStart);
+      var startRow = startRange.getRow();
+      var startCol = startRange.getColumn();
+      var range = sheet.getRange(startRow, startCol, 100, 3);
+      var data = range.getValues();
+      for (var i = 0; i < data.length; i++) {
+        var row = data[i];
+        if (row[0] !== "" || row[1] !== "" || row[2] !== "") {
+          var r = (parseInt(row[0]) || 0) - 1;
+          data[i] = r <= 0 ? ["", "", ""] : [r, row[1], row[2]];
+        }
+      }
+      range.setValues(data);
+      return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "zeroCellGasto") {
+      var sheet = getSheet(spreadsheetId);
+      sheet.getRange(cellGasto).setValue(0);
+      SpreadsheetApp.flush(); Utilities.sleep(1500);
+      return ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "syncHistorico") {
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ss.getSheetByName("Historico") || ss.insertSheet("Historico");
+      sheet.clearContents();
+      sheet.appendRow(["id", "nome", "valor", "data"]);
+      var historico = body.historico || [];
+      if (historico.length > 0) {
+        sheet.getRange(2, 1, historico.length, 4).setValues(
+          historico.map(function(d) { return [d.id, d.nome, d.valor, d.data]; })
+        );
+      }
+      return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    return ContentService
+      .createTextOutput(JSON.stringify({ error: "Ação desconhecida" }))
+      .setMimeType(ContentService.MimeType.JSON);
+
+  } catch (err) {
+    return ContentService
+      .createTextOutput(JSON.stringify({ error: err.message }))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}`;
+
+  function copyCode(btn) {
+    navigator.clipboard.writeText(CODE_GS_RAW).then(() => {
+      btn.classList.add('copied');
+      btn.querySelector('.copy-label').textContent = 'Copiado!';
+      setTimeout(() => {
+        btn.classList.remove('copied');
+        btn.querySelector('.copy-label').textContent = 'Copiar código';
+      }, 2500);
+    });
+  }
+</script>
+</body>
+</html>

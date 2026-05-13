@@ -12,7 +12,7 @@ import {
 } from "../services/sheetsService";
 
 // ─── Código do Apps Script embutido no app ───────────────────────────────────
-const CODE_GS = `// Google Apps Script — Finance Tracker Backend (Standalone / Universal)
+const CODE_GS = `// Google Apps Script — Hero Backend (Standalone / Universal)
 //
 // COMO PUBLICAR:
 //  1. Acesse script.google.com e crie um novo projeto
@@ -361,7 +361,7 @@ export default function OnboardingScreen() {
       setTimeout(() => setCopied(false), 3000);
     } catch {
       try {
-        await Share.share({ message: CODE_GS, title: "Code.gs — Finance Tracker" });
+        await Share.share({ message: CODE_GS, title: "Code.gs — Hero" });
       } catch { /* ignora */ }
     }
   }

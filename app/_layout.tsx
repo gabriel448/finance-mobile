@@ -4,7 +4,7 @@ import {
   Animated, StyleSheet, StatusBar, ActivityIndicator, Platform,
 } from "react-native";
 import * as NavigationBar from "expo-navigation-bar";
-import { Stack, useRouter, usePathname, useSegments } from "expo-router";
+import { Stack, useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getCellConfig, getScriptUrl } from "../services/sheetsService";
@@ -15,7 +15,6 @@ const DRAWER_WIDTH = 280;
 export default function RootLayout() {
   const router   = useRouter();
   const pathname = usePathname();
-  const segments = useSegments();
   const checked  = useRef(false);
 
   const [ready,           setReady]           = useState(false);
@@ -115,7 +114,7 @@ export default function RootLayout() {
         <Stack.Screen name="login"       options={{ headerShown: false }} />
         <Stack.Screen name="onboarding"  options={{ headerShown: false }} />
         <Stack.Screen name="setup"       options={{ title: "Configurar células", headerLeft: () => null }} />
-        <Stack.Screen name="index"       options={{ title: "Finanças" }} />
+        <Stack.Screen name="index"       options={{ title: "Hero" }} />
         <Stack.Screen name="history"     options={{ title: "Histórico" }} />
         <Stack.Screen name="installments" options={{ title: "Parcelas" }} />
         <Stack.Screen name="settings"    options={{ title: "Configurações" }} />
