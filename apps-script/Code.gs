@@ -82,9 +82,17 @@ function doGet(e) {
           .setMimeType(ContentService.MimeType.JSON);
       }
       var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
-      var historico = rows.map(function(r) {
-        return { id: String(r[0]), nome: String(r[1]), valor: Number(r[2]), data: String(r[3]) };
-      });
+      var historico = rows
+        .filter(function(r) {
+          var id    = String(r[0]);
+          var nome  = String(r[1]);
+          var valor = Number(r[2]);
+          // id deve ser timestamp numérico (≥10 dígitos), nome não-vazio, valor numérico
+          return /^\d{10,}$/.test(id) && nome.trim() !== "" && !isNaN(valor);
+        })
+        .map(function(r) {
+          return { id: String(r[0]), nome: String(r[1]), valor: Number(r[2]), data: String(r[3]) };
+        });
       return ContentService
         .createTextOutput(JSON.stringify({ historico: historico }))
         .setMimeType(ContentService.MimeType.JSON);
