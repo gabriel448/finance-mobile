@@ -14,7 +14,7 @@ import {
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { getInstallments, Installment, payInstallment, payAllInstallments, deleteInstallment, getCellConfig, addInstallmentToSheet } from "../services/sheetsService";
-import { getPaidInstallments, togglePaidInstallment, markInstallmentPaid, markAllInstallmentsPaid, isProximoMes, getProximasParcelas, removeProximaParcelaByNome, addInstallmentMetadata, ProximaParcela } from "../services/localStorage";
+import { getPaidInstallments, togglePaidInstallment, markInstallmentPaid, markAllInstallmentsPaid, resetPaidInstallmentsIfNewMonth, isProximoMes, getProximasParcelas, removeProximaParcelaByNome, addInstallmentMetadata, ProximaParcela } from "../services/localStorage";
 import { Ionicons } from "@expo/vector-icons";
 import InstallmentDetailModal from "../components/InstallmentDetailModal";
 import AddInstallmentModal from "../components/AddInstallmentModal";
@@ -79,6 +79,7 @@ export default function InstallmentsScreen() {
     setDiaFechamento(config.diaFechamento);
 
     await promoverParcelasSeNecessario(config.diaFechamento);
+    await resetPaidInstallmentsIfNewMonth();
 
     const [, paid] = await Promise.all([
       carregarTudo(),

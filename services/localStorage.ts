@@ -182,6 +182,7 @@ export async function removeProximaParcelaByNome(nome: string): Promise<void> {
 // ── Parcelas pagas (estado local, não sincronizado com a planilha) ──────────
 
 const PAID_INSTALLMENTS_KEY = "paid_installments";
+const PAID_MONTH_KEY = "paid_installments_month";
 
 export async function getPaidInstallments(): Promise<string[]> {
   const raw = await AsyncStorage.getItem(PAID_INSTALLMENTS_KEY);
@@ -218,4 +219,16 @@ export async function markAllInstallmentsPaid(nomes: string[]): Promise<void> {
     if (!lista.includes(nome)) lista.push(nome);
   }
   await AsyncStorage.setItem(PAID_INSTALLMENTS_KEY, JSON.stringify(lista));
+}
+
+export async function resetPaidInstallmentsIfNewMonth(): Promise<boolean> {
+  const stored = await AsyncStorage.getItem(PAID_MONTH_KEY);
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  if (stored === currentMonth) return false;
+  await AsyncStorage.multiSet([
+    [PAID_INSTALLMENTS_KEY, JSON.stringify([])],
+    [PAID_MONTH_KEY, currentMonth],
+  ]);
+  return true;
 }
