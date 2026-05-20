@@ -11,6 +11,7 @@ export default function SetupScreen() {
   const router = useRouter();
   const [cellSaldo,        setCellSaldo]        = useState("F9");
   const [cellGasto,        setCellGasto]        = useState("I8");
+  const [cellGanhosVariaveis, setCellGanhosVariaveis] = useState("");
   const [cellParcelasStart,setCellParcelasStart] = useState("");
   const [diaFechamento,    setDiaFechamento]    = useState("");
   const [cellCustoFixo,    setCellCustoFixo]    = useState("");
@@ -26,6 +27,7 @@ export default function SetupScreen() {
       if (!c) return;
       setCellSaldo(c.cellSaldo);
       setCellGasto(c.cellGasto);
+      if (c.cellGanhosVariaveis) setCellGanhosVariaveis(c.cellGanhosVariaveis);
       if (c.cellParcelasStart) setCellParcelasStart(c.cellParcelasStart);
       if (c.diaFechamento != null) setDiaFechamento(String(c.diaFechamento));
       if (c.cellCustoFixo)    setCellCustoFixo(c.cellCustoFixo);
@@ -62,6 +64,7 @@ export default function SetupScreen() {
       await saveCellConfig({
         cellSaldo: saldo,
         cellGasto: gasto,
+        cellGanhosVariaveis: cellGanhosVariaveis.trim().toUpperCase() || undefined,
         cellParcelasStart: cellParcelasStart.trim().toUpperCase() || undefined,
         diaFechamento:     diaFechNum,
         cellCustoFixo:     cellCustoFixo.trim().toUpperCase()     || undefined,
@@ -139,6 +142,13 @@ export default function SetupScreen() {
           <Text style={styles.hint}>O app soma os gastos nesta célula</Text>
           <TextInput style={styles.input} value={cellGasto} onChangeText={setCellGasto}
             placeholder="ex: I8" placeholderTextColor="#484f58" autoCapitalize="characters" autoCorrect={false} />
+
+          <View style={styles.divider} />
+
+          <Text style={styles.label}>Célula de ganhos variáveis (Opcional)</Text>
+          <Text style={styles.hint}>O app soma ganhos extras nesta célula; a planilha a inclui no saldo automaticamente</Text>
+          <TextInput style={styles.input} value={cellGanhosVariaveis} onChangeText={setCellGanhosVariaveis}
+            placeholder="ex: H8" placeholderTextColor="#484f58" autoCapitalize="characters" autoCorrect={false} />
 
           <View style={styles.divider} />
 

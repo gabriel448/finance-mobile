@@ -1336,6 +1336,44 @@
       <span class="kw">return</span> ContentService.createTextOutput(JSON.stringify({ ok: <span class="kw">true</span> })).setMimeType(ContentService.MimeType.JSON);
     }
 
+    <span class="kw">if</span> (body.action === <span class="str">"addGanho"</span>) {
+      <span class="kw">var</span> <span class="vr">sheet</span>              = getSheet(spreadsheetId);
+      <span class="kw">var</span> <span class="vr">valor</span>              = parseFloat(body.valor);
+      <span class="kw">var</span> <span class="vr">cellGanhosVariaveis</span> = body.cellGanhosVariaveis || <span class="str">""</span>;
+      <span class="kw">if</span> (!cellGanhosVariaveis) <span class="kw">throw new</span> Error(<span class="str">"cellGanhosVariaveis não informada."</span>);
+      <span class="kw">var</span> <span class="vr">ganhoAtual</span> = parseFloat(sheet.getRange(cellGanhosVariaveis).getValue()) || <span class="num">0</span>;
+      sheet.getRange(cellGanhosVariaveis).setValue(ganhoAtual + valor);
+      SpreadsheetApp.flush(); Utilities.sleep(<span class="num">1500</span>);
+      <span class="kw">return</span> ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    <span class="kw">if</span> (body.action === <span class="str">"zeroCellGanhos"</span>) {
+      <span class="kw">var</span> <span class="vr">sheet</span>              = getSheet(spreadsheetId);
+      <span class="kw">var</span> <span class="vr">cellGanhosVariaveis</span> = body.cellGanhosVariaveis || <span class="str">""</span>;
+      <span class="kw">if</span> (!cellGanhosVariaveis) <span class="kw">throw new</span> Error(<span class="str">"cellGanhosVariaveis não informada."</span>);
+      sheet.getRange(cellGanhosVariaveis).setValue(<span class="num">0</span>);
+      SpreadsheetApp.flush(); Utilities.sleep(<span class="num">1500</span>);
+      <span class="kw">return</span> ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    <span class="kw">if</span> (body.action === <span class="str">"syncGanhosHistorico"</span>) {
+      <span class="kw">var</span> <span class="vr">ss</span>       = SpreadsheetApp.openById(spreadsheetId);
+      <span class="kw">var</span> <span class="vr">sheet</span>    = ss.getSheetByName(<span class="str">"GanhosHistorico"</span>) || ss.insertSheet(<span class="str">"GanhosHistorico"</span>);
+      sheet.clearContents();
+      sheet.appendRow([<span class="str">"id"</span>, <span class="str">"nome"</span>, <span class="str">"valor"</span>, <span class="str">"data"</span>]);
+      <span class="kw">var</span> <span class="vr">historico</span> = body.historico || [];
+      <span class="kw">if</span> (historico.length > <span class="num">0</span>) {
+        sheet.getRange(<span class="num">2</span>, <span class="num">1</span>, historico.length, <span class="num">4</span>).setValues(
+          historico.map(<span class="kw">function</span>(d) { <span class="kw">return</span> [d.id, d.nome, d.valor, d.data]; })
+        );
+      }
+      <span class="kw">return</span> ContentService.createTextOutput(JSON.stringify({ ok: <span class="kw">true</span> })).setMimeType(ContentService.MimeType.JSON);
+    }
+
     <span class="kw">return</span> ContentService
       .createTextOutput(JSON.stringify({ error: <span class="str">"Ação desconhecida"</span> }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -1396,6 +1434,9 @@
 //     • Quem tem acesso: Qualquer pessoa
 //  5. Clique em "Implantar" e autorize as permissões
 //  6. Copie a URL gerada e cole no app
+//
+// O script funciona como um proxy autônomo:
+// o spreadsheetId é enviado pelo app a cada requisição.
 
 function getSheet(spreadsheetId) {
   var ss = SpreadsheetApp.openById(spreadsheetId);
@@ -1454,6 +1495,29 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (action === "getGanhosHistorico") {
+      if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ss.getSheetByName("GanhosHistorico");
+      if (!sheet || sheet.getLastRow() < 2) {
+        return ContentService
+          .createTextOutput(JSON.stringify({ historico: [] }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
+      var historico = rows
+        .filter(function(r) {
+          var id = String(r[0]); var nome = String(r[1]); var valor = Number(r[2]);
+          return /^[0-9]{10,}$/.test(id) && nome.trim() !== "" && !isNaN(valor);
+        })
+        .map(function(r) {
+          return { id: String(r[0]), nome: String(r[1]), valor: Number(r[2]), data: String(r[3]) };
+        });
+      return ContentService
+        .createTextOutput(JSON.stringify({ historico: historico }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     if (action === "getHistorico") {
       if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
       var ss = SpreadsheetApp.openById(spreadsheetId);
@@ -1466,10 +1530,8 @@ function doGet(e) {
       var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
       var historico = rows
         .filter(function(r) {
-          var id    = String(r[0]);
-          var nome  = String(r[1]);
-          var valor = Number(r[2]);
-          return /^\d{10,}$/.test(id) &amp;&amp; nome.trim() !== "" &amp;&amp; !isNaN(valor);
+          var id = String(r[0]); var nome = String(r[1]); var valor = Number(r[2]);
+          return /^[0-9]{10,}$/.test(id) && nome.trim() !== "" && !isNaN(valor);
         })
         .map(function(r) {
           return { id: String(r[0]), nome: String(r[1]), valor: Number(r[2]), data: String(r[3]) };
@@ -1582,6 +1644,44 @@ function doPost(e) {
     if (body.action === "syncHistorico") {
       var ss = SpreadsheetApp.openById(spreadsheetId);
       var sheet = ss.getSheetByName("Historico") || ss.insertSheet("Historico");
+      sheet.clearContents();
+      sheet.appendRow(["id", "nome", "valor", "data"]);
+      var historico = body.historico || [];
+      if (historico.length > 0) {
+        sheet.getRange(2, 1, historico.length, 4).setValues(
+          historico.map(function(d) { return [d.id, d.nome, d.valor, d.data]; })
+        );
+      }
+      return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "addGanho") {
+      var sheet = getSheet(spreadsheetId);
+      var valor = parseFloat(body.valor);
+      var cellGanhosVariaveis = body.cellGanhosVariaveis || "";
+      if (!cellGanhosVariaveis) throw new Error("cellGanhosVariaveis não informada.");
+      var ganhoAtual = parseFloat(sheet.getRange(cellGanhosVariaveis).getValue()) || 0;
+      sheet.getRange(cellGanhosVariaveis).setValue(ganhoAtual + valor);
+      SpreadsheetApp.flush(); Utilities.sleep(1500);
+      return ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "zeroCellGanhos") {
+      var sheet = getSheet(spreadsheetId);
+      var cellGanhosVariaveis = body.cellGanhosVariaveis || "";
+      if (!cellGanhosVariaveis) throw new Error("cellGanhosVariaveis não informada.");
+      sheet.getRange(cellGanhosVariaveis).setValue(0);
+      SpreadsheetApp.flush(); Utilities.sleep(1500);
+      return ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "syncGanhosHistorico") {
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ss.getSheetByName("GanhosHistorico") || ss.insertSheet("GanhosHistorico");
       sheet.clearContents();
       sheet.appendRow(["id", "nome", "valor", "data"]);
       var historico = body.historico || [];

@@ -85,6 +85,7 @@ export default function RootLayout() {
   const navItems: NavItem[] = [
     { label: "Início",           icon: "home-outline",       route: "/"             },
     { label: "Histórico",        icon: "time-outline",       route: "/history"      },
+    { label: "Ganhos Variáveis", icon: "trending-up-outline", route: "/ganhos"       },
     { label: "Parcelas",         icon: "card-outline",       route: "/installments" },
     { label: "Simular saldo",    icon: "calculator-outline", onPress: () => { setDrawerOpen(false); setSimulateVisible(true); } },
     { label: "Configurações",    icon: "settings-outline",   route: "/settings"     },
@@ -116,6 +117,7 @@ export default function RootLayout() {
         <Stack.Screen name="setup"       options={{ title: "Configurar células", headerLeft: () => null }} />
         <Stack.Screen name="index"       options={{ title: "Hero" }} />
         <Stack.Screen name="history"     options={{ title: "Histórico" }} />
+        <Stack.Screen name="ganhos"      options={{ title: "Ganhos Variáveis" }} />
         <Stack.Screen name="installments" options={{ title: "Parcelas" }} />
         <Stack.Screen name="settings"    options={{ title: "Configurações" }} />
       </Stack>

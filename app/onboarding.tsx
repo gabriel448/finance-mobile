@@ -101,7 +101,32 @@ function doGet(e) {
           var id    = String(r[0]);
           var nome  = String(r[1]);
           var valor = Number(r[2]);
-          return /^\\d{10,}$/.test(id) && nome.trim() !== "" && !isNaN(valor);
+          return /^[0-9]{10,}$/.test(id) && nome.trim() !== "" && !isNaN(valor);
+        })
+        .map(function(r) {
+          return { id: String(r[0]), nome: String(r[1]), valor: Number(r[2]), data: String(r[3]) };
+        });
+      return ContentService
+        .createTextOutput(JSON.stringify({ historico: historico }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === "getGanhosHistorico") {
+      if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ss.getSheetByName("GanhosHistorico");
+      if (!sheet || sheet.getLastRow() < 2) {
+        return ContentService
+          .createTextOutput(JSON.stringify({ historico: [] }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
+      var historico = rows
+        .filter(function(r) {
+          var id    = String(r[0]);
+          var nome  = String(r[1]);
+          var valor = Number(r[2]);
+          return /^[0-9]{10,}$/.test(id) && nome.trim() !== "" && !isNaN(valor);
         })
         .map(function(r) {
           return { id: String(r[0]), nome: String(r[1]), valor: Number(r[2]), data: String(r[3]) };
@@ -267,6 +292,48 @@ function doPost(e) {
       var ss = SpreadsheetApp.openById(spreadsheetId);
       var sheet = ss.getSheetByName("Historico");
       if (!sheet) sheet = ss.insertSheet("Historico");
+      sheet.clearContents();
+      sheet.appendRow(["id", "nome", "valor", "data"]);
+      var historico = body.historico || [];
+      if (historico.length > 0) {
+        var rows = historico.map(function(d) { return [d.id, d.nome, d.valor, d.data]; });
+        sheet.getRange(2, 1, rows.length, 4).setValues(rows);
+      }
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "addGanho") {
+      var sheet = getSheet(spreadsheetId);
+      var valor = parseFloat(body.valor);
+      var cellGanhosVariaveis = body.cellGanhosVariaveis || "";
+      if (!cellGanhosVariaveis) throw new Error("cellGanhosVariaveis não informada.");
+      var ganhoAtual = parseFloat(sheet.getRange(cellGanhosVariaveis).getValue()) || 0;
+      sheet.getRange(cellGanhosVariaveis).setValue(ganhoAtual + valor);
+      SpreadsheetApp.flush();
+      Utilities.sleep(1500);
+      return ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "zeroCellGanhos") {
+      var sheet = getSheet(spreadsheetId);
+      var cellGanhosVariaveis = body.cellGanhosVariaveis || "";
+      if (!cellGanhosVariaveis) throw new Error("cellGanhosVariaveis não informada.");
+      sheet.getRange(cellGanhosVariaveis).setValue(0);
+      SpreadsheetApp.flush();
+      Utilities.sleep(1500);
+      return ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "syncGanhosHistorico") {
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ss.getSheetByName("GanhosHistorico");
+      if (!sheet) sheet = ss.insertSheet("GanhosHistorico");
       sheet.clearContents();
       sheet.appendRow(["id", "nome", "valor", "data"]);
       var historico = body.historico || [];

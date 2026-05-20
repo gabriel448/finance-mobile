@@ -5,6 +5,8 @@ const SCRIPT_URL_KEY    = "apps_script_url";
 const SPREADSHEET_ID_KEY = "spreadsheet_id";
 const CONFIG_KEY        = "cell_config";
 const HIST_KEY          = "historico_despesas";
+const GANHOS_KEY        = "historico_ganhos";
+const GANHOS_MONTH_KEY  = "ganhos_zero_month";
 
 // ── URL do Web App (script autônomo) ──────────────────────────────────────
 
@@ -65,13 +67,14 @@ export async function pingScript(scriptUrl: string, spreadsheetId: string): Prom
 // ── Configuração das células ───────────────────────────────────────────────
 
 export interface CellConfig {
-  cellSaldo: string;          // ex: "F9"
-  cellGasto: string;          // ex: "I8"
-  cellParcelasStart?: string; // ex: "K5"
-  cellCustoFixo?: string;     // ex: "D20" — total de custos fixos
-  cellSalario?: string;       // ex: "B2"  — salário/capital (recomendado)
-  salarioManual?: number;     // fallback se não usar célula
-  diaFechamento?: number;     // dia do mês em que o cartão fecha (1–28)
+  cellSaldo: string;
+  cellGasto: string;
+  cellParcelasStart?: string;
+  cellCustoFixo?: string;
+  cellSalario?: string;
+  salarioManual?: number;
+  diaFechamento?: number;
+  cellGanhosVariaveis?: string; // ex: "H8" — ganhos variáveis acumulados do mês
 }
 
 export async function saveCellConfig(config: CellConfig): Promise<void> {
@@ -322,4 +325,177 @@ export async function removeDespesa(id: string): Promise<void> {
 export async function clearDespesas(): Promise<void> {
   await AsyncStorage.removeItem(HIST_KEY);
   syncHistoricoToSheet([]);
+}
+
+// ── Ganhos Variáveis (local + backup na planilha) ──────────────────────────
+
+export interface GanhoVariavel {
+  id: string;
+  nome: string;
+  valor: number;
+  data: string; // ISO
+}
+
+const BONUS_ID_PREFIX = "bonus_planilha_";
+
+async function syncGanhosToSheet(lista: GanhoVariavel[]): Promise<void> {
+  try {
+    const { url, spreadsheetId } = await getCredentials();
+    // Não sincroniza entradas de bônus — são derivadas da célula, não do histórico manual
+    const toSync = lista.filter((g) => !g.id.startsWith(BONUS_ID_PREFIX));
+    await safeFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "syncGanhosHistorico", spreadsheetId, historico: toSync }),
+    });
+  } catch {
+    // silencioso — local é o primário
+  }
+}
+
+async function fetchGanhosFromSheet(): Promise<GanhoVariavel[]> {
+  try {
+    const { url, spreadsheetId } = await getCredentials();
+    const data = await safeFetch(
+      `${url}?action=getGanhosHistorico&spreadsheetId=${encodeURIComponent(spreadsheetId)}`
+    );
+    return data.historico ?? [];
+  } catch {
+    return [];
+  }
+}
+
+export async function addGanhoVariavel(nome: string, valor: number): Promise<GanhoVariavel> {
+  const { url, spreadsheetId } = await getCredentials();
+  const config = await getCellConfig();
+  if (!config?.cellGanhosVariaveis) throw new Error("Célula de ganhos variáveis não configurada.");
+
+  await safeFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "addGanho",
+      spreadsheetId,
+      valor,
+      cellGanhosVariaveis: config.cellGanhosVariaveis,
+      cellSaldo: config.cellSaldo,
+    }),
+  });
+
+  const raw = await AsyncStorage.getItem(GANHOS_KEY);
+  const lista: GanhoVariavel[] = raw ? JSON.parse(raw) : [];
+  const novo: GanhoVariavel = { id: Date.now().toString(), nome, valor, data: new Date().toISOString() };
+  lista.unshift(novo);
+  await AsyncStorage.setItem(GANHOS_KEY, JSON.stringify(lista));
+  syncGanhosToSheet(lista);
+  return novo;
+}
+
+export async function getGanhosVariaveis(): Promise<GanhoVariavel[]> {
+  const raw = await AsyncStorage.getItem(GANHOS_KEY);
+  if (raw) return JSON.parse(raw);
+
+  const fromSheet = await fetchGanhosFromSheet();
+  if (fromSheet.length > 0) {
+    await AsyncStorage.setItem(GANHOS_KEY, JSON.stringify(fromSheet));
+  }
+  return fromSheet;
+}
+
+export async function removeGanhoVariavel(id: string): Promise<void> {
+  const raw = await AsyncStorage.getItem(GANHOS_KEY);
+  const lista: GanhoVariavel[] = raw ? JSON.parse(raw) : [];
+  const nova = lista.filter((g) => g.id !== id);
+  await AsyncStorage.setItem(GANHOS_KEY, JSON.stringify(nova));
+  syncGanhosToSheet(nova);
+}
+
+export async function clearGanhosVariaveis(): Promise<void> {
+  await AsyncStorage.removeItem(GANHOS_KEY);
+  syncGanhosToSheet([]);
+}
+
+export async function reconcileGanhosBonus(): Promise<GanhoVariavel[]> {
+  const raw = await AsyncStorage.getItem(GANHOS_KEY);
+  const lista: GanhoVariavel[] = raw ? JSON.parse(raw) : [];
+
+  let cellValue = 0;
+  try {
+    const config = await getCellConfig();
+    if (!config?.cellGanhosVariaveis) return lista;
+    cellValue = await readCellAsNumber(config.cellGanhosVariaveis);
+  } catch {
+    return lista; // offline — retorna sem alterar
+  }
+
+  const now = new Date();
+  const bonusId = `${BONUS_ID_PREFIX}${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+
+  // Soma das entradas manuais do mês atual (exclui entradas de bônus)
+  const manualSum = lista
+    .filter((g) => {
+      const d = new Date(g.data);
+      return d.getFullYear() === now.getFullYear()
+        && d.getMonth() === now.getMonth()
+        && !g.id.startsWith(BONUS_ID_PREFIX);
+    })
+    .reduce((acc, g) => acc + g.valor, 0);
+
+  const bonus = Math.round((cellValue - manualSum) * 100) / 100;
+
+  const existingIdx = lista.findIndex((g) => g.id === bonusId);
+
+  if (bonus <= 0.01) {
+    if (existingIdx >= 0) {
+      lista.splice(existingIdx, 1);
+      await AsyncStorage.setItem(GANHOS_KEY, JSON.stringify(lista));
+      syncGanhosToSheet(lista);
+    }
+    return lista;
+  }
+
+  // Já existe e valor não mudou — não faz nada
+  if (existingIdx >= 0 && Math.abs(lista[existingIdx].valor - bonus) < 0.01) {
+    return lista;
+  }
+
+  // Remove entrada antiga do bônus (se existir) e insere atualizada no topo
+  if (existingIdx >= 0) lista.splice(existingIdx, 1);
+  lista.unshift({
+    id: bonusId,
+    nome: "Bônus adicionado pela planilha",
+    valor: bonus,
+    data: new Date().toISOString(),
+  });
+
+  await AsyncStorage.setItem(GANHOS_KEY, JSON.stringify(lista));
+  syncGanhosToSheet(lista);
+  return lista;
+}
+
+export async function zeroCellGanhosIfNewMonth(): Promise<void> {
+  const stored = await AsyncStorage.getItem(GANHOS_MONTH_KEY);
+  const now = new Date();
+  const currentMonth = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  if (stored === currentMonth) return;
+
+  await AsyncStorage.setItem(GANHOS_MONTH_KEY, currentMonth);
+
+  try {
+    const { url, spreadsheetId } = await getCredentials();
+    const config = await getCellConfig();
+    if (!config?.cellGanhosVariaveis) return;
+    await safeFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "zeroCellGanhos",
+        spreadsheetId,
+        cellGanhosVariaveis: config.cellGanhosVariaveis,
+        cellSaldo: config.cellSaldo,
+      }),
+    });
+  } catch {
+    // silencioso — tenta novamente na próxima abertura
+  }
 }
