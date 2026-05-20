@@ -5,8 +5,8 @@ import {
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { getCellConfig, getInstallments, readCellAsNumber, Installment } from "../services/sheetsService";
-import { getPaidInstallments } from "../services/localStorage";
+import { getCellConfig, getInstallments, readCellAsNumber, Installment, getProximasParcelasComFallback } from "../services/sheetsService";
+import { getPaidInstallments, ProximaParcela } from "../services/localStorage";
 
 interface Props {
   visible: boolean;
@@ -18,6 +18,7 @@ type Step = "loading" | "unpaid-warning" | "result" | "error";
 interface SimResult {
   salario:               number;
   custoFixo:             number;
+  ganhosVariaveis:       number;
   parcelasProximoMes:    number;
   saldoSimulado:         number;
   detalheParcelas:       { nome: string; valor: number; motivo: string }[];
@@ -38,8 +39,10 @@ export default function SimulateModal({ visible, onClose }: Props) {
   const [pendingCalc, setPendingCalc] = useState<{
     salario: number;
     custoFixo: number;
+    ganhosVariaveis: number;
     allInstallments: Installment[];
     paidSet: Set<string>;
+    proximasParcelas: ProximaParcela[];
   } | null>(null);
 
   useEffect(() => {
@@ -62,11 +65,13 @@ export default function SimulateModal({ visible, onClose }: Props) {
       if (!temSalario) throw new Error("Salário/capital não configurado.");
 
       // Busca em paralelo
-      const [custoFixo, salarioCell, paidList, allInstallments] = await Promise.all([
+      const [custoFixo, salarioCell, ganhosVariaveis, paidList, allInstallments, proximasParcelas] = await Promise.all([
         readCellAsNumber(config.cellCustoFixo),
         config.cellSalario ? readCellAsNumber(config.cellSalario) : Promise.resolve(null),
+        config.cellGanhosVariaveis ? readCellAsNumber(config.cellGanhosVariaveis) : Promise.resolve(0),
         getPaidInstallments(),
         config.cellParcelasStart ? getInstallments() : Promise.resolve([]),
+        getProximasParcelasComFallback(),
       ]);
 
       const salario = salarioCell ?? config.salarioManual ?? 0;
@@ -76,10 +81,10 @@ export default function SimulateModal({ visible, onClose }: Props) {
 
       if (unpaid.length > 0) {
         setUnpaidItems(unpaid);
-        setPendingCalc({ salario, custoFixo, allInstallments, paidSet });
+        setPendingCalc({ salario, custoFixo, ganhosVariaveis: ganhosVariaveis ?? 0, allInstallments, paidSet, proximasParcelas });
         setStep("unpaid-warning");
       } else {
-        calcResult(salario, custoFixo, allInstallments, paidSet);
+        calcResult(salario, custoFixo, ganhosVariaveis ?? 0, allInstallments, paidSet, proximasParcelas);
       }
     } catch (e: any) {
       setErro(e.message ?? "Erro ao simular.");
@@ -90,8 +95,10 @@ export default function SimulateModal({ visible, onClose }: Props) {
   function calcResult(
     salario: number,
     custoFixo: number,
+    ganhosVariaveis: number,
     allInstallments: Installment[],
-    paidSet: Set<string>
+    paidSet: Set<string>,
+    proximasParcelas: ProximaParcela[]
   ) {
     const detalhe: SimResult["detalheParcelas"] = [];
     let totalParcelas = 0;
@@ -100,34 +107,35 @@ export default function SimulateModal({ visible, onClose }: Props) {
       const paid = paidSet.has(item.nome);
 
       if (paid) {
-        // Já pagou este mês: restantes na planilha já foi decrementado.
-        // Se ainda sobra, vai aparecer no próximo mês.
         if (item.restantes > 0) {
           detalhe.push({ nome: item.nome, valor: item.valor, motivo: "ainda tem parcelas" });
           totalParcelas += item.valor;
         }
-        // restantes == 0 → encerrou, não entra
       } else {
-        // Não pagou ainda: vai pagar este mês → restantes - 1
-        // Se restantes - 1 > 0, ainda vai aparecer no próximo mês
         if (item.restantes > 1) {
           detalhe.push({ nome: item.nome, valor: item.valor, motivo: `${item.restantes - 1}x restantes após este mês` });
           totalParcelas += item.valor;
         }
-        // restantes == 1 → vai encerrar este mês, não entra no próximo
       }
     }
 
-    const saldoSimulado = salario - custoFixo - totalParcelas;
+    // Próximas parcelas entram todas no mês que vem (serão promovidas e pagas)
+    for (const p of proximasParcelas) {
+      detalhe.push({ nome: p.nome, valor: p.valor, motivo: "entra na fatura do próximo mês" });
+      totalParcelas += p.valor;
+    }
 
-    setResult({ salario, custoFixo, parcelasProximoMes: totalParcelas, saldoSimulado, detalheParcelas: detalhe });
+    // Ganhos variáveis são zerados no início do próximo mês
+    const saldoSimulado = salario - custoFixo - totalParcelas - ganhosVariaveis;
+
+    setResult({ salario, custoFixo, ganhosVariaveis, parcelasProximoMes: totalParcelas, saldoSimulado, detalheParcelas: detalhe });
     setStep("result");
   }
 
   function handleContinuarSemPagar() {
     if (!pendingCalc) return;
-    const { salario, custoFixo, allInstallments, paidSet } = pendingCalc;
-    calcResult(salario, custoFixo, allInstallments, paidSet);
+    const { salario, custoFixo, ganhosVariaveis, allInstallments, paidSet, proximasParcelas } = pendingCalc;
+    calcResult(salario, custoFixo, ganhosVariaveis, allInstallments, paidSet, proximasParcelas);
   }
 
   function handleClose() {
@@ -221,6 +229,9 @@ export default function SimulateModal({ visible, onClose }: Props) {
                 <BreakdownRow label="Salário / Capital" value={result.salario} positive />
                 <BreakdownRow label="Custos fixos" value={result.custoFixo} />
                 <BreakdownRow label="Parcelas do próximo mês" value={result.parcelasProximoMes} />
+                {result.ganhosVariaveis > 0 && (
+                  <BreakdownRow label="Ganhos variáveis (serão zerados)" value={result.ganhosVariaveis} />
+                )}
               </View>
 
               {/* Detalhe das parcelas */}

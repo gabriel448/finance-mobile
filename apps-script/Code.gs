@@ -123,6 +123,34 @@ function doGet(e) {
         .setMimeType(ContentService.MimeType.JSON);
     }
 
+    if (action === "getProximasParcelas") {
+      if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ss.getSheetByName("ProximasParcelas");
+      if (!sheet || sheet.getLastRow() < 2) {
+        return ContentService
+          .createTextOutput(JSON.stringify({ proximas: [] }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
+      var proximas = rows
+        .filter(function(r) {
+          return String(r[0]).trim() !== "" && String(r[1]).trim() !== "";
+        })
+        .map(function(r) {
+          return {
+            id: String(r[0]),
+            nome: String(r[1]),
+            valor: Number(r[2]),
+            restantes: parseInt(r[3]) || 0,
+            dataAdicionado: String(r[4])
+          };
+        });
+      return ContentService
+        .createTextOutput(JSON.stringify({ proximas: proximas }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
     return ContentService
       .createTextOutput(JSON.stringify({ error: "Ação desconhecida: " + action }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -305,6 +333,35 @@ function doPost(e) {
       }
       return ContentService
         .createTextOutput(JSON.stringify({ ok: true }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "syncProximasParcelas") {
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ss.getSheetByName("ProximasParcelas");
+      if (!sheet) sheet = ss.insertSheet("ProximasParcelas");
+      sheet.clearContents();
+      sheet.appendRow(["id", "nome", "valor", "restantes", "dataAdicionado"]);
+      var proximas = body.proximas || [];
+      if (proximas.length > 0) {
+        var rows = proximas.map(function(p) { return [p.id, p.nome, p.valor, p.restantes, p.dataAdicionado]; });
+        sheet.getRange(2, 1, rows.length, 5).setValues(rows);
+      }
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "resetMonthly") {
+      var sheet = getSheet(spreadsheetId);
+      var cellGanhos = body.cellGanhosVariaveis || "";
+      if (cellGanhos) sheet.getRange(cellGanhos).setValue(0);
+      sheet.getRange(cellGasto).setValue(0);
+      SpreadsheetApp.flush();
+      Utilities.sleep(1500);
+      var novoSaldo = sheet.getRange(cellSaldo).getValue();
+      return ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: novoSaldo }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 

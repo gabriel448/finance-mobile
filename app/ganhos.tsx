@@ -1,15 +1,19 @@
-import React, { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo, useRef } from "react";
 import {
   View, Text, SectionList, TouchableOpacity, StyleSheet,
-  StatusBar, RefreshControl, Modal, TextInput, ActivityIndicator, Alert,
+  StatusBar, RefreshControl, Modal, TextInput, ActivityIndicator,
+  Animated,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
+import { useAudioPlayer } from "expo-audio";
 import {
-  getGanhosVariaveis, addGanhoVariavel, removeGanhoVariavel,
+  getGanhosVariaveis, addGanhoVariavel,
   clearGanhosVariaveis, zeroCellGanhosIfNewMonth, reconcileGanhosBonus,
-  getCellConfig, GanhoVariavel,
+  getCellConfig, GanhoVariavel, revogarGanhoVariavel, alterarGanhoVariavel,
 } from "../services/sheetsService";
+import GanhoDetailModal from "../components/GanhoDetailModal";
+import AppAlert, { AppAlertProps } from "../components/AppAlert";
 
 function formatValor(valor: number): string {
   return valor.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -65,10 +69,20 @@ export default function GanhosScreen() {
   const [refreshing,     setRefreshing]     = useState(false);
   const [addVisible,     setAddVisible]     = useState(false);
   const [clearVisible,   setClearVisible]   = useState(false);
+  const [detailVisible,  setDetailVisible]  = useState(false);
+  const [selectedGanho,  setSelectedGanho]  = useState<GanhoVariavel | null>(null);
   const [nome,           setNome]           = useState("");
   const [valor,          setValor]          = useState("");
   const [saving,         setSaving]         = useState(false);
+  const [addSuccess,     setAddSuccess]     = useState(false);
   const [cellConfigured, setCellConfigured] = useState(true);
+  const [alertConfig,    setAlertConfig]    = useState<Omit<AppAlertProps, "visible" | "onClose"> | null>(null);
+
+  function showAlert(cfg: Omit<AppAlertProps, "visible" | "onClose">) { setAlertConfig(cfg); }
+
+  const scaleAnim   = useRef(new Animated.Value(0)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+  const player      = useAudioPlayer(require("../assets/reembolso.mp3"));
 
   const sections = useMemo(() => groupByMonth(ganhos), [ganhos]);
 
@@ -95,42 +109,89 @@ export default function GanhosScreen() {
     setRefreshing(false);
   }
 
+  function resetAddModal() {
+    setNome("");
+    setValor("");
+    setAddSuccess(false);
+    scaleAnim.setValue(0);
+    opacityAnim.setValue(0);
+  }
+
+  function showAddSuccess() {
+    setAddSuccess(true);
+
+    try {
+      player.volume = 1.0;
+      player.seekTo(0);
+      player.play();
+    } catch {}
+
+    Animated.parallel([
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        bounciness: 18,
+        speed: 14,
+      }),
+      Animated.timing(opacityAnim, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    setTimeout(() => {
+      setAddVisible(false);
+      resetAddModal();
+    }, 1400);
+  }
+
   async function handleAdd() {
     const nomeTrimmed = nome.trim();
     const valorNum = parseFloat(valor.replace(",", "."));
-    if (!nomeTrimmed) { Alert.alert("Informe o nome do ganho."); return; }
-    if (isNaN(valorNum) || valorNum <= 0) { Alert.alert("Informe um valor válido."); return; }
+    if (!nomeTrimmed) { showAlert({ type: "error", title: "Campo obrigatório", message: "Informe o nome do ganho." }); return; }
+    if (isNaN(valorNum) || valorNum <= 0) { showAlert({ type: "error", title: "Valor inválido", message: "Informe um valor válido." }); return; }
 
     setSaving(true);
     try {
       const novo = await addGanhoVariavel(nomeTrimmed, valorNum);
       setGanhos((prev) => [novo, ...prev]);
-      setNome("");
-      setValor("");
-      setAddVisible(false);
+      showAddSuccess();
     } catch (e: any) {
       const msg = e.message ?? "Não foi possível adicionar o ganho.";
       const scriptDesatualizado = msg.toLowerCase().includes("desconhecida");
-      Alert.alert(
-        "Erro",
-        scriptDesatualizado
+      showAlert({
+        type: "error",
+        title: "Erro",
+        message: scriptDesatualizado
           ? "O Apps Script não reconheceu a ação. Recopie o código Code.gs no site ou no app (Onboarding) e publique uma nova versão no script.google.com."
-          : msg
-      );
+          : msg,
+      });
     } finally {
       setSaving(false);
     }
-  }
-
-  async function handleDelete(id: string) {
-    await removeGanhoVariavel(id);
-    setGanhos((prev) => prev.filter((g) => g.id !== id));
   }
 
   async function handleClearAll() {
     await clearGanhosVariaveis();
     setGanhos([]);
     setClearVisible(false);
+  }
+
+  function handleItemPress(item: GanhoVariavel) {
+    if (item.id.startsWith("bonus_planilha_")) return;
+    setSelectedGanho(item);
+    setDetailVisible(true);
+  }
+
+  async function handleRevoke(ganho: GanhoVariavel) {
+    await revogarGanhoVariavel(ganho.id, ganho.valor);
+    setGanhos((prev) => prev.filter((g) => g.id !== ganho.id));
+  }
+
+  async function handleAlter(ganho: GanhoVariavel, novoValor: number) {
+    const nova = await alterarGanhoVariavel(ganho.id, ganho.valor, novoValor);
+    setGanhos(nova);
   }
 
   function renderSectionHeader({ section }: { section: MonthSection }) {
@@ -143,25 +204,14 @@ export default function GanhosScreen() {
   }
 
   function renderItem({ item }: { item: GanhoVariavel }) {
-    const hora  = new Date(item.data).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
-    const dia   = new Date(item.data).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
+    const hora    = new Date(item.data).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+    const dia     = new Date(item.data).toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" });
     const isBonus = item.id.startsWith("bonus_planilha_");
     return (
       <TouchableOpacity
         style={[styles.item, isBonus && styles.itemBonus]}
-        onLongPress={() => {
-          if (isBonus) return; // bônus não pode ser removido manualmente
-          Alert.alert(
-            "Remover ganho?",
-            `"${item.nome}" — ${formatValor(item.valor)}`,
-            [
-              { text: "Cancelar", style: "cancel" },
-              { text: "Remover", style: "destructive", onPress: () => handleDelete(item.id) },
-            ]
-          );
-        }}
-        delayLongPress={400}
-        activeOpacity={0.75}
+        onPress={() => handleItemPress(item)}
+        activeOpacity={isBonus ? 1 : 0.75}
       >
         <View style={[styles.itemIconBox, isBonus && styles.itemIconBoxBonus]}>
           <Ionicons name={isBonus ? "sparkles-outline" : "arrow-up-outline"} size={18} color={isBonus ? "#d4a017" : "#3fb950"} />
@@ -174,6 +224,7 @@ export default function GanhosScreen() {
           <Text style={[styles.itemValor, isBonus && styles.itemValorBonus]}>{formatValor(item.valor)}</Text>
           <Text style={styles.itemData}>{dia} {hora}</Text>
         </View>
+        {!isBonus && <Ionicons name="chevron-forward-outline" size={14} color="#30363d" />}
       </TouchableOpacity>
     );
   }
@@ -235,7 +286,7 @@ export default function GanhosScreen() {
       )}
 
       {/* FAB — adicionar */}
-      <TouchableOpacity style={styles.fab} onPress={() => setAddVisible(true)} activeOpacity={0.8}>
+      <TouchableOpacity style={styles.fab} onPress={() => { resetAddModal(); setAddVisible(true); }} activeOpacity={0.8}>
         <Ionicons name="add" size={28} color="#fff" />
       </TouchableOpacity>
 
@@ -247,9 +298,24 @@ export default function GanhosScreen() {
       )}
 
       {/* Modal: adicionar ganho */}
-      <Modal visible={addVisible} transparent animationType="slide" onRequestClose={() => setAddVisible(false)}>
+      <Modal visible={addVisible} transparent animationType="slide" onRequestClose={() => { if (!saving && !addSuccess) { setAddVisible(false); resetAddModal(); } }}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
+
+            {/* Overlay de sucesso dentro do modal de add */}
+            {addSuccess && (
+              <Animated.View style={[styles.addSuccessOverlay, { opacity: opacityAnim }]}>
+                <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
+                  <View style={styles.checkCircle}>
+                    <Ionicons name="checkmark" size={56} color="#fff" />
+                  </View>
+                </Animated.View>
+                <Animated.Text style={[styles.addSuccessText, { opacity: opacityAnim }]}>
+                  Ganho adicionado!
+                </Animated.Text>
+              </Animated.View>
+            )}
+
             <Text style={styles.modalTitle}>Novo Ganho Variável</Text>
 
             <Text style={styles.modalLabel}>Descrição</Text>
@@ -260,6 +326,7 @@ export default function GanhosScreen() {
               value={nome}
               onChangeText={setNome}
               autoFocus
+              editable={!saving && !addSuccess}
             />
 
             <Text style={styles.modalLabel}>Valor (R$)</Text>
@@ -270,12 +337,13 @@ export default function GanhosScreen() {
               value={valor}
               onChangeText={setValor}
               keyboardType="decimal-pad"
+              editable={!saving && !addSuccess}
             />
 
             <TouchableOpacity
-              style={[styles.btnConfirm, saving && { opacity: 0.6 }]}
+              style={[styles.btnConfirm, (saving || addSuccess) && { opacity: 0.6 }]}
               onPress={handleAdd}
-              disabled={saving}
+              disabled={saving || addSuccess}
               activeOpacity={0.85}
             >
               {saving
@@ -284,7 +352,11 @@ export default function GanhosScreen() {
               }
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.btnCancelar} onPress={() => setAddVisible(false)} activeOpacity={0.8}>
+            <TouchableOpacity
+              style={[styles.btnCancelar, (saving || addSuccess) && { opacity: 0.4 }]}
+              onPress={() => { if (!saving && !addSuccess) { setAddVisible(false); resetAddModal(); } }}
+              activeOpacity={0.8}
+            >
               <Text style={styles.btnCancelarText}>Cancelar</Text>
             </TouchableOpacity>
           </View>
@@ -312,6 +384,23 @@ export default function GanhosScreen() {
           </View>
         </View>
       </Modal>
+
+      {alertConfig && (
+        <AppAlert
+          {...alertConfig}
+          visible
+          onClose={() => setAlertConfig(null)}
+        />
+      )}
+
+      {/* Modal: detalhe do ganho */}
+      <GanhoDetailModal
+        visible={detailVisible}
+        ganho={selectedGanho}
+        onClose={() => setDetailVisible(false)}
+        onRevoke={handleRevoke}
+        onAlter={handleAlter}
+      />
     </View>
   );
 }
@@ -399,7 +488,30 @@ const styles = StyleSheet.create({
   modalCard: {
     backgroundColor: "#161b22", borderTopLeftRadius: 24, borderTopRightRadius: 24,
     padding: 28, borderTopWidth: 1, borderColor: "#30363d",
+    overflow: "hidden",
   },
+
+  // ── Sucesso no modal de add ────────────────────────────────────────────────
+  addSuccessOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#161b22",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+  },
+  checkCircle: {
+    width: 96, height: 96, borderRadius: 48,
+    backgroundColor: "#238636",
+    alignItems: "center", justifyContent: "center",
+    shadowColor: "#3fb950", shadowOpacity: 0.5, shadowRadius: 24, elevation: 10,
+  },
+  addSuccessText: {
+    color: "#3fb950", fontSize: 20, fontWeight: "700",
+    marginTop: 20, letterSpacing: 0.3,
+  },
+
   modalTitle: { color: "#e6edf3", fontSize: 20, fontWeight: "700", marginBottom: 20, textAlign: "center" },
   modalLabel: { color: "#8b949e", fontSize: 12, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6 },
   modalInput: {

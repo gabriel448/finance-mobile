@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  Alert, Modal, TextInput, ActivityIndicator,
+  Modal, TextInput, ActivityIndicator,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -9,6 +9,7 @@ import {
   getCellConfig, CellConfig, getScriptUrl, getSpreadsheetId,
   clearScriptUrl, saveScriptUrl, pingScript,
 } from "../services/sheetsService";
+import AppAlert, { AppAlertProps } from "../components/AppAlert";
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -17,6 +18,9 @@ export default function SettingsScreen() {
   const [changeUrlVisible, setChangeUrlVisible] = useState(false);
   const [newUrl,           setNewUrl]           = useState("");
   const [testingUrl,       setTestingUrl]       = useState(false);
+  const [alertConfig,      setAlertConfig]      = useState<Omit<AppAlertProps, "visible" | "onClose"> | null>(null);
+
+  function showAlert(cfg: Omit<AppAlertProps, "visible" | "onClose">) { setAlertConfig(cfg); }
 
   useEffect(() => {
     getCellConfig().then(setConfig);
@@ -29,7 +33,7 @@ export default function SettingsScreen() {
 
   async function handleTrocarUrl() {
     const url = newUrl.trim();
-    if (!url) { Alert.alert("Cole a URL do Apps Script."); return; }
+    if (!url) { showAlert({ type: "error", title: "URL inválida", message: "Cole a URL do Apps Script." }); return; }
     setTestingUrl(true);
     try {
       const sheetId = await getSpreadsheetId();
@@ -39,30 +43,24 @@ export default function SettingsScreen() {
       setScriptUrl(url);
       setNewUrl("");
       setChangeUrlVisible(false);
-      Alert.alert("URL atualizada!", "Conexão testada com sucesso.");
+      showAlert({ type: "success", title: "URL atualizada!", message: "Conexão testada com sucesso." });
     } catch (e: any) {
-      Alert.alert("Erro", e.message ?? "Não foi possível conectar com essa URL.");
+      showAlert({ type: "error", title: "Erro de conexão", message: e.message ?? "Não foi possível conectar com essa URL." });
     } finally {
       setTestingUrl(false);
     }
   }
 
   async function handleReconfigurar() {
-    Alert.alert(
-      "Reconfigurar planilha?",
-      "Isso removerá a URL do script atual e retornará ao onboarding.",
-      [
+    showAlert({
+      type: "confirm",
+      title: "Reconfigurar planilha?",
+      message: "Isso removerá a URL do script atual e retornará ao onboarding.",
+      buttons: [
+        { text: "Reconfigurar", style: "destructive", onPress: async () => { await clearScriptUrl(); router.replace("/onboarding"); } },
         { text: "Cancelar", style: "cancel" },
-        {
-          text: "Reconfigurar",
-          style: "destructive",
-          onPress: async () => {
-            await clearScriptUrl();
-            router.replace("/onboarding");
-          },
-        },
-      ]
-    );
+      ],
+    });
   }
 
   return (
@@ -113,6 +111,14 @@ export default function SettingsScreen() {
       <Text style={styles.info}>
         Configure as células sempre que reorganizar a planilha.
       </Text>
+
+      {alertConfig && (
+        <AppAlert
+          {...alertConfig}
+          visible
+          onClose={() => setAlertConfig(null)}
+        />
+      )}
 
       {/* ── Modal: trocar URL do script ── */}
       <Modal visible={changeUrlVisible} transparent animationType="slide" onRequestClose={() => setChangeUrlVisible(false)}>

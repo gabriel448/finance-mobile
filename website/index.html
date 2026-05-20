@@ -1135,255 +1135,7 @@
           <span class="copy-label">Copiar código</span>
         </button>
       </div>
-<pre id="code-block"><span class="cmt">// Google Apps Script — Hero Backend (Standalone / Universal)
-//
-// COMO PUBLICAR:
-//  1. Acesse script.google.com e crie um novo projeto
-//  2. Apague tudo e cole este código
-//  3. Clique em "Implantar" → "Nova implantação"
-//  4. Tipo: "App da Web"
-//     • Executar como: Eu (seu e-mail)
-//     • Quem tem acesso: Qualquer pessoa
-//  5. Clique em "Implantar" e autorize as permissões
-//  6. Copie a URL gerada e cole no app</span>
-
-<span class="kw">function</span> <span class="fn">getSheet</span>(spreadsheetId) {
-  <span class="kw">var</span> <span class="vr">ss</span> = SpreadsheetApp.openById(spreadsheetId);
-  <span class="kw">if</span> (!ss) <span class="kw">throw new</span> Error(<span class="str">"Planilha não encontrada. Verifique o link informado."</span>);
-  <span class="kw">var</span> <span class="vr">sheet</span> = ss.getSheets()[<span class="num">0</span>];
-  <span class="kw">if</span> (!sheet) <span class="kw">throw new</span> Error(<span class="str">"Nenhuma aba encontrada na planilha."</span>);
-  <span class="kw">return</span> sheet;
-}
-
-<span class="kw">function</span> <span class="fn">doGet</span>(e) {
-  <span class="kw">try</span> {
-    <span class="kw">var</span> <span class="vr">action</span>        = (e &amp;&amp; e.parameter &amp;&amp; e.parameter.action)        || <span class="str">""</span>;
-    <span class="kw">var</span> <span class="vr">spreadsheetId</span> = (e &amp;&amp; e.parameter &amp;&amp; e.parameter.spreadsheetId) || <span class="str">""</span>;
-    <span class="kw">var</span> <span class="vr">cellSaldo</span>     = (e &amp;&amp; e.parameter &amp;&amp; e.parameter.cellSaldo)     || <span class="str">"F9"</span>;
-
-    <span class="kw">if</span> (action === <span class="str">"ping"</span>) {
-      <span class="kw">if</span> (!spreadsheetId) <span class="kw">throw new</span> Error(<span class="str">"spreadsheetId não informado."</span>);
-      <span class="kw">var</span> <span class="vr">ss</span> = SpreadsheetApp.openById(spreadsheetId);
-      <span class="kw">return</span> ContentService
-        .createTextOutput(JSON.stringify({ ok: <span class="kw">true</span>, title: ss.getName() }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">if</span> (action === <span class="str">"getSaldo"</span>) {
-      <span class="kw">if</span> (!spreadsheetId) <span class="kw">throw new</span> Error(<span class="str">"spreadsheetId não informado."</span>);
-      <span class="kw">var</span> <span class="vr">sheet</span> = <span class="fn">getSheet</span>(spreadsheetId);
-      <span class="kw">var</span> <span class="vr">saldo</span> = sheet.getRange(cellSaldo).getValue();
-      <span class="kw">return</span> ContentService
-        .createTextOutput(JSON.stringify({ saldo: saldo }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">if</span> (action === <span class="str">"getInstallments"</span>) {
-      <span class="kw">var</span> <span class="vr">cellParcelasStart</span> = (e &amp;&amp; e.parameter &amp;&amp; e.parameter.cellParcelasStart) || <span class="str">""</span>;
-      <span class="kw">if</span> (!spreadsheetId) <span class="kw">throw new</span> Error(<span class="str">"spreadsheetId não informado."</span>);
-      <span class="kw">if</span> (!cellParcelasStart) <span class="kw">throw new</span> Error(<span class="str">"Célula inicial de parcelas não configurada."</span>);
-      <span class="kw">var</span> <span class="vr">sheet</span>      = <span class="fn">getSheet</span>(spreadsheetId);
-      <span class="kw">var</span> <span class="vr">startRange</span> = sheet.getRange(cellParcelasStart);
-      <span class="kw">var</span> <span class="vr">startRow</span>   = startRange.getRow();
-      <span class="kw">var</span> <span class="vr">startCol</span>   = startRange.getColumn();
-      <span class="kw">var</span> <span class="vr">data</span>         = sheet.getRange(startRow, startCol, <span class="num">100</span>, <span class="num">3</span>).getValues();
-      <span class="kw">var</span> <span class="vr">installments</span> = [];
-      <span class="kw">for</span> (<span class="kw">var</span> <span class="vr">i</span> = <span class="num">0</span>; i &lt; data.length; i++) {
-        <span class="kw">var</span> <span class="vr">row</span> = data[i];
-        <span class="kw">if</span> (row[<span class="num">0</span>] !== <span class="str">""</span> || row[<span class="num">1</span>] !== <span class="str">""</span> || row[<span class="num">2</span>] !== <span class="str">""</span>) {
-          installments.push({
-            rowIndex: startRow + i,
-            restantes: parseInt(row[<span class="num">0</span>]) || <span class="num">0</span>,
-            nome: row[<span class="num">1</span>],
-            valor: parseFloat(String(row[<span class="num">2</span>]).replace(<span class="str">','</span>, <span class="str">'.'</span>)) || <span class="num">0</span>
-          });
-        }
-      }
-      <span class="kw">return</span> ContentService
-        .createTextOutput(JSON.stringify({ installments: installments }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">if</span> (action === <span class="str">"getHistorico"</span>) {
-      <span class="kw">if</span> (!spreadsheetId) <span class="kw">throw new</span> Error(<span class="str">"spreadsheetId não informado."</span>);
-      <span class="kw">var</span> <span class="vr">ss</span>    = SpreadsheetApp.openById(spreadsheetId);
-      <span class="kw">var</span> <span class="vr">sheet</span> = ss.getSheetByName(<span class="str">"Historico"</span>);
-      <span class="kw">if</span> (!sheet || sheet.getLastRow() &lt; <span class="num">2</span>) {
-        <span class="kw">return</span> ContentService
-          .createTextOutput(JSON.stringify({ historico: [] }))
-          .setMimeType(ContentService.MimeType.JSON);
-      }
-      <span class="kw">var</span> <span class="vr">rows</span>     = sheet.getRange(<span class="num">2</span>, <span class="num">1</span>, sheet.getLastRow() - <span class="num">1</span>, <span class="num">4</span>).getValues();
-      <span class="kw">var</span> <span class="vr">historico</span> = rows.map(<span class="kw">function</span>(r) {
-        <span class="kw">return</span> { id: String(r[<span class="num">0</span>]), nome: String(r[<span class="num">1</span>]), valor: Number(r[<span class="num">2</span>]), data: String(r[<span class="num">3</span>]) };
-      });
-      <span class="kw">return</span> ContentService
-        .createTextOutput(JSON.stringify({ historico: historico }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">return</span> ContentService
-      .createTextOutput(JSON.stringify({ error: <span class="str">"Ação desconhecida: "</span> + action }))
-      .setMimeType(ContentService.MimeType.JSON);
-
-  } <span class="kw">catch</span> (err) {
-    <span class="kw">return</span> ContentService
-      .createTextOutput(JSON.stringify({ error: err.message }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}
-
-<span class="kw">function</span> <span class="fn">doPost</span>(e) {
-  <span class="kw">try</span> {
-    <span class="kw">var</span> <span class="vr">body</span>          = JSON.parse(e.postData.contents);
-    <span class="kw">var</span> <span class="vr">spreadsheetId</span> = body.spreadsheetId || <span class="str">""</span>;
-    <span class="kw">var</span> <span class="vr">cellGasto</span>     = body.cellGasto      || <span class="str">"I8"</span>;
-    <span class="kw">var</span> <span class="vr">cellSaldo</span>     = body.cellSaldo      || <span class="str">"F9"</span>;
-
-    <span class="kw">if</span> (!spreadsheetId) <span class="kw">throw new</span> Error(<span class="str">"spreadsheetId não informado."</span>);
-
-    <span class="kw">if</span> (body.action === <span class="str">"addExpense"</span>) {
-      <span class="kw">var</span> <span class="vr">sheet</span>      = <span class="fn">getSheet</span>(spreadsheetId);
-      <span class="kw">var</span> <span class="vr">valor</span>      = parseFloat(body.valor);
-      <span class="kw">var</span> <span class="vr">gastoAtual</span> = parseFloat(sheet.getRange(cellGasto).getValue()) || <span class="num">0</span>;
-      sheet.getRange(cellGasto).setValue(gastoAtual + valor);
-      SpreadsheetApp.flush(); Utilities.sleep(<span class="num">1500</span>);
-      <span class="kw">return</span> ContentService
-        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">if</span> (body.action === <span class="str">"subtractExpense"</span>) {
-      <span class="kw">var</span> <span class="vr">sheet</span>      = <span class="fn">getSheet</span>(spreadsheetId);
-      <span class="kw">var</span> <span class="vr">valor</span>      = parseFloat(body.valor);
-      <span class="kw">var</span> <span class="vr">gastoAtual</span> = parseFloat(sheet.getRange(cellGasto).getValue()) || <span class="num">0</span>;
-      sheet.getRange(cellGasto).setValue(Math.max(<span class="num">0</span>, gastoAtual - valor));
-      SpreadsheetApp.flush(); Utilities.sleep(<span class="num">1500</span>);
-      <span class="kw">return</span> ContentService
-        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">if</span> (body.action === <span class="str">"addInstallment"</span>) {
-      <span class="kw">var</span> <span class="vr">sheet</span>      = <span class="fn">getSheet</span>(spreadsheetId);
-      <span class="kw">var</span> <span class="vr">startRange</span> = sheet.getRange(body.cellParcelasStart);
-      <span class="kw">var</span> <span class="vr">startRow</span>   = startRange.getRow();
-      <span class="kw">var</span> <span class="vr">startCol</span>   = startRange.getColumn();
-      <span class="kw">var</span> <span class="vr">data</span>       = sheet.getRange(startRow, startCol, <span class="num">100</span>, <span class="num">3</span>).getValues();
-      <span class="kw">var</span> <span class="vr">target</span>     = startRow + <span class="num">99</span>;
-      <span class="kw">for</span> (<span class="kw">var</span> <span class="vr">i</span> = <span class="num">0</span>; i &lt; data.length; i++) {
-        <span class="kw">if</span> (data[i][<span class="num">0</span>] === <span class="str">""</span> &amp;&amp; data[i][<span class="num">1</span>] === <span class="str">""</span> &amp;&amp; data[i][<span class="num">2</span>] === <span class="str">""</span>) { target = startRow + i; <span class="kw">break</span>; }
-      }
-      sheet.getRange(target, startCol, <span class="num">1</span>, <span class="num">3</span>).setValues([[body.restantes, body.nome, body.valor]]);
-      <span class="kw">return</span> ContentService.createTextOutput(JSON.stringify({ ok: <span class="kw">true</span> })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">if</span> (body.action === <span class="str">"deleteInstallment"</span>) {
-      <span class="kw">var</span> <span class="vr">sheet</span>    = <span class="fn">getSheet</span>(spreadsheetId);
-      <span class="kw">var</span> <span class="vr">startCol</span> = sheet.getRange(body.cellParcelasStart).getColumn();
-      sheet.getRange(parseInt(body.rowIndex), startCol, <span class="num">1</span>, <span class="num">3</span>).clearContent();
-      <span class="kw">return</span> ContentService.createTextOutput(JSON.stringify({ ok: <span class="kw">true</span> })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">if</span> (body.action === <span class="str">"payInstallment"</span>) {
-      <span class="kw">var</span> <span class="vr">sheet</span>    = <span class="fn">getSheet</span>(spreadsheetId);
-      <span class="kw">var</span> <span class="vr">startCol</span> = sheet.getRange(body.cellParcelasStart).getColumn();
-      <span class="kw">var</span> <span class="vr">cell</span>     = sheet.getRange(parseInt(body.rowIndex), startCol);
-      <span class="kw">var</span> <span class="vr">rem</span>      = Math.max(<span class="num">0</span>, (parseInt(cell.getValue()) || <span class="num">0</span>) - <span class="num">1</span>);
-      <span class="kw">if</span> (rem === <span class="num">0</span>) { sheet.getRange(parseInt(body.rowIndex), startCol, <span class="num">1</span>, <span class="num">3</span>).clearContent(); }
-      <span class="kw">else</span> { cell.setValue(rem); }
-      <span class="kw">return</span> ContentService.createTextOutput(JSON.stringify({ remaining: rem })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">if</span> (body.action === <span class="str">"payAllInstallments"</span>) {
-      <span class="kw">var</span> <span class="vr">sheet</span>     = <span class="fn">getSheet</span>(spreadsheetId);
-      <span class="kw">var</span> <span class="vr">startRange</span> = sheet.getRange(body.cellParcelasStart);
-      <span class="kw">var</span> <span class="vr">startRow</span>   = startRange.getRow();
-      <span class="kw">var</span> <span class="vr">startCol</span>   = startRange.getColumn();
-      <span class="kw">var</span> <span class="vr">range</span>     = sheet.getRange(startRow, startCol, <span class="num">100</span>, <span class="num">3</span>);
-      <span class="kw">var</span> <span class="vr">data</span>      = range.getValues();
-      <span class="kw">for</span> (<span class="kw">var</span> <span class="vr">i</span> = <span class="num">0</span>; i &lt; data.length; i++) {
-        <span class="kw">var</span> <span class="vr">row</span> = data[i];
-        <span class="kw">if</span> (row[<span class="num">0</span>] !== <span class="str">""</span> || row[<span class="num">1</span>] !== <span class="str">""</span> || row[<span class="num">2</span>] !== <span class="str">""</span>) {
-          <span class="kw">var</span> <span class="vr">r</span> = (parseInt(row[<span class="num">0</span>]) || <span class="num">0</span>) - <span class="num">1</span>;
-          data[i] = r &lt;= <span class="num">0</span> ? [<span class="str">""</span>, <span class="str">""</span>, <span class="str">""</span>] : [r, row[<span class="num">1</span>], row[<span class="num">2</span>]];
-        }
-      }
-      range.setValues(data);
-      <span class="kw">return</span> ContentService.createTextOutput(JSON.stringify({ ok: <span class="kw">true</span> })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">if</span> (body.action === <span class="str">"zeroCellGasto"</span>) {
-      <span class="kw">var</span> <span class="vr">sheet</span> = <span class="fn">getSheet</span>(spreadsheetId);
-      sheet.getRange(cellGasto).setValue(<span class="num">0</span>);
-      SpreadsheetApp.flush(); Utilities.sleep(<span class="num">1500</span>);
-      <span class="kw">return</span> ContentService
-        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">if</span> (body.action === <span class="str">"syncHistorico"</span>) {
-      <span class="kw">var</span> <span class="vr">ss</span>       = SpreadsheetApp.openById(spreadsheetId);
-      <span class="kw">var</span> <span class="vr">sheet</span>    = ss.getSheetByName(<span class="str">"Historico"</span>) || ss.insertSheet(<span class="str">"Historico"</span>);
-      sheet.clearContents();
-      sheet.appendRow([<span class="str">"id"</span>, <span class="str">"nome"</span>, <span class="str">"valor"</span>, <span class="str">"data"</span>]);
-      <span class="kw">var</span> <span class="vr">historico</span> = body.historico || [];
-      <span class="kw">if</span> (historico.length > <span class="num">0</span>) {
-        sheet.getRange(<span class="num">2</span>, <span class="num">1</span>, historico.length, <span class="num">4</span>).setValues(
-          historico.map(<span class="kw">function</span>(d) { <span class="kw">return</span> [d.id, d.nome, d.valor, d.data]; })
-        );
-      }
-      <span class="kw">return</span> ContentService.createTextOutput(JSON.stringify({ ok: <span class="kw">true</span> })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">if</span> (body.action === <span class="str">"addGanho"</span>) {
-      <span class="kw">var</span> <span class="vr">sheet</span>              = getSheet(spreadsheetId);
-      <span class="kw">var</span> <span class="vr">valor</span>              = parseFloat(body.valor);
-      <span class="kw">var</span> <span class="vr">cellGanhosVariaveis</span> = body.cellGanhosVariaveis || <span class="str">""</span>;
-      <span class="kw">if</span> (!cellGanhosVariaveis) <span class="kw">throw new</span> Error(<span class="str">"cellGanhosVariaveis não informada."</span>);
-      <span class="kw">var</span> <span class="vr">ganhoAtual</span> = parseFloat(sheet.getRange(cellGanhosVariaveis).getValue()) || <span class="num">0</span>;
-      sheet.getRange(cellGanhosVariaveis).setValue(ganhoAtual + valor);
-      SpreadsheetApp.flush(); Utilities.sleep(<span class="num">1500</span>);
-      <span class="kw">return</span> ContentService
-        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">if</span> (body.action === <span class="str">"zeroCellGanhos"</span>) {
-      <span class="kw">var</span> <span class="vr">sheet</span>              = getSheet(spreadsheetId);
-      <span class="kw">var</span> <span class="vr">cellGanhosVariaveis</span> = body.cellGanhosVariaveis || <span class="str">""</span>;
-      <span class="kw">if</span> (!cellGanhosVariaveis) <span class="kw">throw new</span> Error(<span class="str">"cellGanhosVariaveis não informada."</span>);
-      sheet.getRange(cellGanhosVariaveis).setValue(<span class="num">0</span>);
-      SpreadsheetApp.flush(); Utilities.sleep(<span class="num">1500</span>);
-      <span class="kw">return</span> ContentService
-        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
-        .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">if</span> (body.action === <span class="str">"syncGanhosHistorico"</span>) {
-      <span class="kw">var</span> <span class="vr">ss</span>       = SpreadsheetApp.openById(spreadsheetId);
-      <span class="kw">var</span> <span class="vr">sheet</span>    = ss.getSheetByName(<span class="str">"GanhosHistorico"</span>) || ss.insertSheet(<span class="str">"GanhosHistorico"</span>);
-      sheet.clearContents();
-      sheet.appendRow([<span class="str">"id"</span>, <span class="str">"nome"</span>, <span class="str">"valor"</span>, <span class="str">"data"</span>]);
-      <span class="kw">var</span> <span class="vr">historico</span> = body.historico || [];
-      <span class="kw">if</span> (historico.length > <span class="num">0</span>) {
-        sheet.getRange(<span class="num">2</span>, <span class="num">1</span>, historico.length, <span class="num">4</span>).setValues(
-          historico.map(<span class="kw">function</span>(d) { <span class="kw">return</span> [d.id, d.nome, d.valor, d.data]; })
-        );
-      }
-      <span class="kw">return</span> ContentService.createTextOutput(JSON.stringify({ ok: <span class="kw">true</span> })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    <span class="kw">return</span> ContentService
-      .createTextOutput(JSON.stringify({ error: <span class="str">"Ação desconhecida"</span> }))
-      .setMimeType(ContentService.MimeType.JSON);
-
-  } <span class="kw">catch</span> (err) {
-    <span class="kw">return</span> ContentService
-      .createTextOutput(JSON.stringify({ error: err.message }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}</pre>
+<pre id="code-block"></pre>
     </div>
   </div>
 </section>
@@ -1473,10 +1225,12 @@ function doGet(e) {
       var cellParcelasStart = (e && e.parameter && e.parameter.cellParcelasStart) || "";
       if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
       if (!cellParcelasStart) throw new Error("Célula inicial de parcelas não configurada.");
+      
       var sheet = getSheet(spreadsheetId);
       var startRange = sheet.getRange(cellParcelasStart);
       var startRow = startRange.getRow();
       var startCol = startRange.getColumn();
+      
       var data = sheet.getRange(startRow, startCol, 100, 3).getValues();
       var installments = [];
       for (var i = 0; i < data.length; i++) {
@@ -1507,8 +1261,10 @@ function doGet(e) {
       var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
       var historico = rows
         .filter(function(r) {
-          var id = String(r[0]); var nome = String(r[1]); var valor = Number(r[2]);
-          return /^[0-9]{10,}$/.test(id) && nome.trim() !== "" && !isNaN(valor);
+          var id    = String(r[0]);
+          var nome  = String(r[1]);
+          var valor = Number(r[2]);
+          return /^\\d{10,}$/.test(id) && nome.trim() !== "" && !isNaN(valor);
         })
         .map(function(r) {
           return { id: String(r[0]), nome: String(r[1]), valor: Number(r[2]), data: String(r[3]) };
@@ -1530,14 +1286,45 @@ function doGet(e) {
       var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 4).getValues();
       var historico = rows
         .filter(function(r) {
-          var id = String(r[0]); var nome = String(r[1]); var valor = Number(r[2]);
-          return /^[0-9]{10,}$/.test(id) && nome.trim() !== "" && !isNaN(valor);
+          var id    = String(r[0]);
+          var nome  = String(r[1]);
+          var valor = Number(r[2]);
+          // id deve ser timestamp numérico (≥10 dígitos), nome não-vazio, valor numérico
+          return /^\\d{10,}$/.test(id) && nome.trim() !== "" && !isNaN(valor);
         })
         .map(function(r) {
           return { id: String(r[0]), nome: String(r[1]), valor: Number(r[2]), data: String(r[3]) };
         });
       return ContentService
         .createTextOutput(JSON.stringify({ historico: historico }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (action === "getProximasParcelas") {
+      if (!spreadsheetId) throw new Error("spreadsheetId não informado.");
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ss.getSheetByName("ProximasParcelas");
+      if (!sheet || sheet.getLastRow() < 2) {
+        return ContentService
+          .createTextOutput(JSON.stringify({ proximas: [] }))
+          .setMimeType(ContentService.MimeType.JSON);
+      }
+      var rows = sheet.getRange(2, 1, sheet.getLastRow() - 1, 5).getValues();
+      var proximas = rows
+        .filter(function(r) {
+          return String(r[0]).trim() !== "" && String(r[1]).trim() !== "";
+        })
+        .map(function(r) {
+          return {
+            id: String(r[0]),
+            nome: String(r[1]),
+            valor: Number(r[2]),
+            restantes: parseInt(r[3]) || 0,
+            dataAdicionado: String(r[4])
+          };
+        });
+      return ContentService
+        .createTextOutput(JSON.stringify({ proximas: proximas }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -1565,10 +1352,14 @@ function doPost(e) {
       var sheet      = getSheet(spreadsheetId);
       var valor      = parseFloat(body.valor);
       var gastoAtual = parseFloat(sheet.getRange(cellGasto).getValue()) || 0;
+
       sheet.getRange(cellGasto).setValue(gastoAtual + valor);
-      SpreadsheetApp.flush(); Utilities.sleep(1500);
+      SpreadsheetApp.flush();
+      Utilities.sleep(1500);
+
+      var novoSaldo = sheet.getRange(cellSaldo).getValue();
       return ContentService
-        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .createTextOutput(JSON.stringify({ novoSaldo: novoSaldo }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -1576,83 +1367,106 @@ function doPost(e) {
       var sheet      = getSheet(spreadsheetId);
       var valor      = parseFloat(body.valor);
       var gastoAtual = parseFloat(sheet.getRange(cellGasto).getValue()) || 0;
-      sheet.getRange(cellGasto).setValue(Math.max(0, gastoAtual - valor));
-      SpreadsheetApp.flush(); Utilities.sleep(1500);
+      var novoGasto  = Math.max(0, gastoAtual - valor);
+
+      sheet.getRange(cellGasto).setValue(novoGasto);
+      SpreadsheetApp.flush();
+      Utilities.sleep(1500);
+
+      var novoSaldo = sheet.getRange(cellSaldo).getValue();
       return ContentService
-        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .createTextOutput(JSON.stringify({ novoSaldo: novoSaldo }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
     if (body.action === "addInstallment") {
       var sheet = getSheet(spreadsheetId);
-      var startRange = sheet.getRange(body.cellParcelasStart);
+      var cellParcelasStart = body.cellParcelasStart;
+      var startRange = sheet.getRange(cellParcelasStart);
       var startRow = startRange.getRow();
       var startCol = startRange.getColumn();
+      
       var data = sheet.getRange(startRow, startCol, 100, 3).getValues();
-      var target = startRow + 99;
+      var targetRowIndex = startRow + 99;
       for (var i = 0; i < data.length; i++) {
-        if (data[i][0] === "" && data[i][1] === "" && data[i][2] === "") { target = startRow + i; break; }
+        if (data[i][0] === "" && data[i][1] === "" && data[i][2] === "") {
+          targetRowIndex = startRow + i;
+          break;
+        }
       }
-      sheet.getRange(target, startCol, 1, 3).setValues([[body.restantes, body.nome, body.valor]]);
-      return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
+      
+      sheet.getRange(targetRowIndex, startCol, 1, 3).setValues([[
+        body.restantes,
+        body.nome,
+        body.valor
+      ]]);
+      
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     if (body.action === "deleteInstallment") {
       var sheet = getSheet(spreadsheetId);
-      var startCol = sheet.getRange(body.cellParcelasStart).getColumn();
-      sheet.getRange(parseInt(body.rowIndex), startCol, 1, 3).clearContent();
-      return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
+      var cellParcelasStart = body.cellParcelasStart;
+      var rowIndex = parseInt(body.rowIndex);
+      var startCol = sheet.getRange(cellParcelasStart).getColumn();
+      
+      sheet.getRange(rowIndex, startCol, 1, 3).clearContent();
+      
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     if (body.action === "payInstallment") {
       var sheet = getSheet(spreadsheetId);
-      var startCol = sheet.getRange(body.cellParcelasStart).getColumn();
-      var cell = sheet.getRange(parseInt(body.rowIndex), startCol);
-      var rem = Math.max(0, (parseInt(cell.getValue()) || 0) - 1);
-      if (rem === 0) { sheet.getRange(parseInt(body.rowIndex), startCol, 1, 3).clearContent(); }
-      else { cell.setValue(rem); }
-      return ContentService.createTextOutput(JSON.stringify({ remaining: rem })).setMimeType(ContentService.MimeType.JSON);
+      var cellParcelasStart = body.cellParcelasStart;
+      var rowIndex = parseInt(body.rowIndex);
+      var startCol = sheet.getRange(cellParcelasStart).getColumn();
+      
+      var remainingCell = sheet.getRange(rowIndex, startCol);
+      var currentRemaining = parseInt(remainingCell.getValue()) || 0;
+      var remaining = Math.max(0, currentRemaining - 1);
+      
+      if (remaining === 0) {
+        sheet.getRange(rowIndex, startCol, 1, 3).clearContent();
+      } else {
+        remainingCell.setValue(remaining);
+      }
+      
+      return ContentService
+        .createTextOutput(JSON.stringify({ remaining: remaining }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     if (body.action === "payAllInstallments") {
       var sheet = getSheet(spreadsheetId);
-      var startRange = sheet.getRange(body.cellParcelasStart);
+      var cellParcelasStart = body.cellParcelasStart;
+      var startRange = sheet.getRange(cellParcelasStart);
       var startRow = startRange.getRow();
       var startCol = startRange.getColumn();
-      var range = sheet.getRange(startRow, startCol, 100, 3);
-      var data = range.getValues();
+      
+      var dataRange = sheet.getRange(startRow, startCol, 100, 3);
+      var data = dataRange.getValues();
+      
       for (var i = 0; i < data.length; i++) {
         var row = data[i];
         if (row[0] !== "" || row[1] !== "" || row[2] !== "") {
-          var r = (parseInt(row[0]) || 0) - 1;
-          data[i] = r <= 0 ? ["", "", ""] : [r, row[1], row[2]];
+          var remaining = (parseInt(row[0]) || 0) - 1;
+          if (remaining <= 0) {
+            data[i] = ["", "", ""];
+          } else {
+            data[i][0] = remaining;
+          }
         }
       }
-      range.setValues(data);
-      return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (body.action === "zeroCellGasto") {
-      var sheet = getSheet(spreadsheetId);
-      sheet.getRange(cellGasto).setValue(0);
-      SpreadsheetApp.flush(); Utilities.sleep(1500);
+      
+      dataRange.setValues(data);
+      
       return ContentService
-        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .createTextOutput(JSON.stringify({ ok: true }))
         .setMimeType(ContentService.MimeType.JSON);
-    }
-
-    if (body.action === "syncHistorico") {
-      var ss = SpreadsheetApp.openById(spreadsheetId);
-      var sheet = ss.getSheetByName("Historico") || ss.insertSheet("Historico");
-      sheet.clearContents();
-      sheet.appendRow(["id", "nome", "valor", "data"]);
-      var historico = body.historico || [];
-      if (historico.length > 0) {
-        sheet.getRange(2, 1, historico.length, 4).setValues(
-          historico.map(function(d) { return [d.id, d.nome, d.valor, d.data]; })
-        );
-      }
-      return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
     }
 
     if (body.action === "addGanho") {
@@ -1662,9 +1476,11 @@ function doPost(e) {
       if (!cellGanhosVariaveis) throw new Error("cellGanhosVariaveis não informada.");
       var ganhoAtual = parseFloat(sheet.getRange(cellGanhosVariaveis).getValue()) || 0;
       sheet.getRange(cellGanhosVariaveis).setValue(ganhoAtual + valor);
-      SpreadsheetApp.flush(); Utilities.sleep(1500);
+      SpreadsheetApp.flush();
+      Utilities.sleep(1500);
+      var novoSaldo = sheet.getRange(cellSaldo).getValue();
       return ContentService
-        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .createTextOutput(JSON.stringify({ novoSaldo: novoSaldo }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
@@ -1673,24 +1489,84 @@ function doPost(e) {
       var cellGanhosVariaveis = body.cellGanhosVariaveis || "";
       if (!cellGanhosVariaveis) throw new Error("cellGanhosVariaveis não informada.");
       sheet.getRange(cellGanhosVariaveis).setValue(0);
-      SpreadsheetApp.flush(); Utilities.sleep(1500);
+      SpreadsheetApp.flush();
+      Utilities.sleep(1500);
+      var novoSaldo = sheet.getRange(cellSaldo).getValue();
       return ContentService
-        .createTextOutput(JSON.stringify({ novoSaldo: sheet.getRange(cellSaldo).getValue() }))
+        .createTextOutput(JSON.stringify({ novoSaldo: novoSaldo }))
         .setMimeType(ContentService.MimeType.JSON);
     }
 
     if (body.action === "syncGanhosHistorico") {
       var ss = SpreadsheetApp.openById(spreadsheetId);
-      var sheet = ss.getSheetByName("GanhosHistorico") || ss.insertSheet("GanhosHistorico");
+      var sheet = ss.getSheetByName("GanhosHistorico");
+      if (!sheet) sheet = ss.insertSheet("GanhosHistorico");
       sheet.clearContents();
       sheet.appendRow(["id", "nome", "valor", "data"]);
       var historico = body.historico || [];
       if (historico.length > 0) {
-        sheet.getRange(2, 1, historico.length, 4).setValues(
-          historico.map(function(d) { return [d.id, d.nome, d.valor, d.data]; })
-        );
+        var rows = historico.map(function(d) { return [d.id, d.nome, d.valor, d.data]; });
+        sheet.getRange(2, 1, rows.length, 4).setValues(rows);
       }
-      return ContentService.createTextOutput(JSON.stringify({ ok: true })).setMimeType(ContentService.MimeType.JSON);
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "syncProximasParcelas") {
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ss.getSheetByName("ProximasParcelas");
+      if (!sheet) sheet = ss.insertSheet("ProximasParcelas");
+      sheet.clearContents();
+      sheet.appendRow(["id", "nome", "valor", "restantes", "dataAdicionado"]);
+      var proximas = body.proximas || [];
+      if (proximas.length > 0) {
+        var rows = proximas.map(function(p) { return [p.id, p.nome, p.valor, p.restantes, p.dataAdicionado]; });
+        sheet.getRange(2, 1, rows.length, 5).setValues(rows);
+      }
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "resetMonthly") {
+      var sheet = getSheet(spreadsheetId);
+      var cellGanhos = body.cellGanhosVariaveis || "";
+      if (cellGanhos) sheet.getRange(cellGanhos).setValue(0);
+      sheet.getRange(cellGasto).setValue(0);
+      SpreadsheetApp.flush();
+      Utilities.sleep(1500);
+      var novoSaldo = sheet.getRange(cellSaldo).getValue();
+      return ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: novoSaldo }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "zeroCellGasto") {
+      var sheet = getSheet(spreadsheetId);
+      sheet.getRange(cellGasto).setValue(0);
+      SpreadsheetApp.flush();
+      Utilities.sleep(1500);
+      var novoSaldo = sheet.getRange(cellSaldo).getValue();
+      return ContentService
+        .createTextOutput(JSON.stringify({ novoSaldo: novoSaldo }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
+
+    if (body.action === "syncHistorico") {
+      var ss = SpreadsheetApp.openById(spreadsheetId);
+      var sheet = ss.getSheetByName("Historico");
+      if (!sheet) sheet = ss.insertSheet("Historico");
+      sheet.clearContents();
+      sheet.appendRow(["id", "nome", "valor", "data"]);
+      var historico = body.historico || [];
+      if (historico.length > 0) {
+        var rows = historico.map(function(d) { return [d.id, d.nome, d.valor, d.data]; });
+        sheet.getRange(2, 1, rows.length, 4).setValues(rows);
+      }
+      return ContentService
+        .createTextOutput(JSON.stringify({ ok: true }))
+        .setMimeType(ContentService.MimeType.JSON);
     }
 
     return ContentService
@@ -1702,7 +1578,9 @@ function doPost(e) {
       .createTextOutput(JSON.stringify({ error: err.message }))
       .setMimeType(ContentService.MimeType.JSON);
   }
-}`;
+}
+`;
+  document.getElementById('code-block').textContent = CODE_GS_RAW;
 
   function copyCode(btn) {
     navigator.clipboard.writeText(CODE_GS_RAW).then(() => {

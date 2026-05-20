@@ -8,7 +8,10 @@ import { Stack, useRouter, usePathname } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { getCellConfig, getScriptUrl } from "../services/sheetsService";
+import { shouldShowMonthReset, shouldShowScriptUpdateNotice, markScriptUpdateNoticeSeen } from "../services/localStorage";
 import SimulateModal from "../components/SimulateModal";
+import MonthResetModal from "../components/MonthResetModal";
+import UpdateNoticeModal from "../components/UpdateNoticeModal";
 
 const DRAWER_WIDTH = 280;
 
@@ -17,9 +20,11 @@ export default function RootLayout() {
   const pathname = usePathname();
   const checked  = useRef(false);
 
-  const [ready,           setReady]           = useState(false);
-  const [drawerOpen,      setDrawerOpen]      = useState(false);
-  const [simulateVisible, setSimulateVisible] = useState(false);
+  const [ready,            setReady]            = useState(false);
+  const [drawerOpen,       setDrawerOpen]       = useState(false);
+  const [simulateVisible,  setSimulateVisible]  = useState(false);
+  const [monthResetVisible,   setMonthResetVisible]   = useState(false);
+  const [updateNoticeVisible, setUpdateNoticeVisible] = useState(false);
 
   const translateX     = useRef(new Animated.Value(-DRAWER_WIDTH)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
@@ -41,8 +46,17 @@ export default function RootLayout() {
         const config = await getCellConfig();
         if (!config) {
           destination = "/setup";
+        } else {
+          // Config OK — verifica avisos
+          const showReset = await shouldShowMonthReset();
+          if (showReset) setMonthResetVisible(true);
+
+          const showUpdate = await shouldShowScriptUpdateNotice();
+          if (showUpdate) {
+            await markScriptUpdateNoticeSeen();
+            setUpdateNoticeVisible(true);
+          }
         }
-        // Se tudo OK, permanece na rota atual (index)
       } catch (e) {
         // Em caso de erro inesperado, envia para o onboarding
         destination = "/onboarding";
@@ -142,6 +156,8 @@ export default function RootLayout() {
       )}
 
       <SimulateModal visible={simulateVisible} onClose={() => setSimulateVisible(false)} />
+      <MonthResetModal visible={monthResetVisible} onClose={() => setMonthResetVisible(false)} />
+      <UpdateNoticeModal visible={updateNoticeVisible} onClose={() => setUpdateNoticeVisible(false)} />
 
       {/* Drawer */}
       {!isSetup && (

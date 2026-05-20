@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ProximaParcela } from "./localStorage";
 
 // ── Chaves do AsyncStorage ─────────────────────────────────────────────────
 const SCRIPT_URL_KEY    = "apps_script_url";
@@ -7,6 +8,7 @@ const CONFIG_KEY        = "cell_config";
 const HIST_KEY          = "historico_despesas";
 const GANHOS_KEY        = "historico_ganhos";
 const GANHOS_MONTH_KEY  = "ganhos_zero_month";
+const PROXIMAS_KEY      = "proximas_parcelas";
 
 // ── URL do Web App (script autônomo) ──────────────────────────────────────
 
@@ -473,6 +475,23 @@ export async function reconcileGanhosBonus(): Promise<GanhoVariavel[]> {
   return lista;
 }
 
+export async function resetMonthlyCells(): Promise<void> {
+  const { url, spreadsheetId } = await getCredentials();
+  const config = await getCellConfig();
+  if (!config?.cellGasto) throw new Error("Célula de gastos não configurada.");
+  await safeFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "resetMonthly",
+      spreadsheetId,
+      cellGasto: config.cellGasto,
+      cellSaldo: config.cellSaldo,
+      cellGanhosVariaveis: config.cellGanhosVariaveis ?? "",
+    }),
+  });
+}
+
 export async function zeroCellGanhosIfNewMonth(): Promise<void> {
   const stored = await AsyncStorage.getItem(GANHOS_MONTH_KEY);
   const now = new Date();
@@ -498,4 +517,116 @@ export async function zeroCellGanhosIfNewMonth(): Promise<void> {
   } catch {
     // silencioso — tenta novamente na próxima abertura
   }
+}
+
+export async function revogarGanhoVariavel(id: string, valor: number): Promise<void> {
+  const { url, spreadsheetId } = await getCredentials();
+  const config = await getCellConfig();
+  if (!config?.cellGanhosVariaveis) throw new Error("Célula de ganhos variáveis não configurada.");
+
+  await safeFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "addGanho",
+      spreadsheetId,
+      valor: -valor,
+      cellGanhosVariaveis: config.cellGanhosVariaveis,
+      cellSaldo: config.cellSaldo,
+    }),
+  });
+
+  const raw = await AsyncStorage.getItem(GANHOS_KEY);
+  const lista: GanhoVariavel[] = raw ? JSON.parse(raw) : [];
+  const nova = lista.filter((g) => g.id !== id);
+  await AsyncStorage.setItem(GANHOS_KEY, JSON.stringify(nova));
+  syncGanhosToSheet(nova);
+}
+
+export async function alterarGanhoVariavel(
+  id: string,
+  valorAntigo: number,
+  novoValor: number
+): Promise<GanhoVariavel[]> {
+  const { url, spreadsheetId } = await getCredentials();
+  const config = await getCellConfig();
+  if (!config?.cellGanhosVariaveis) throw new Error("Célula de ganhos variáveis não configurada.");
+
+  const delta = novoValor - valorAntigo;
+  await safeFetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      action: "addGanho",
+      spreadsheetId,
+      valor: delta,
+      cellGanhosVariaveis: config.cellGanhosVariaveis,
+      cellSaldo: config.cellSaldo,
+    }),
+  });
+
+  const raw = await AsyncStorage.getItem(GANHOS_KEY);
+  const lista: GanhoVariavel[] = raw ? JSON.parse(raw) : [];
+  const nova = lista.map((g) => (g.id === id ? { ...g, valor: novoValor } : g));
+  await AsyncStorage.setItem(GANHOS_KEY, JSON.stringify(nova));
+  syncGanhosToSheet(nova);
+  return nova;
+}
+
+// ── Próximas Parcelas (local + backup na planilha) ─────────────────────────
+
+async function syncProximasParcelasToSheet(lista: ProximaParcela[]): Promise<void> {
+  try {
+    const { url, spreadsheetId } = await getCredentials();
+    await safeFetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "syncProximasParcelas", spreadsheetId, proximas: lista }),
+    });
+  } catch {
+    // silencioso — tenta novamente na próxima operação
+  }
+}
+
+async function fetchProximasParcelasFromSheet(): Promise<ProximaParcela[]> {
+  try {
+    const { url, spreadsheetId } = await getCredentials();
+    const data = await safeFetch(
+      `${url}?action=getProximasParcelas&spreadsheetId=${encodeURIComponent(spreadsheetId)}`
+    );
+    return Array.isArray(data.proximas) ? data.proximas : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function getProximasParcelasComFallback(): Promise<ProximaParcela[]> {
+  const raw = await AsyncStorage.getItem(PROXIMAS_KEY);
+  if (raw) return JSON.parse(raw);
+
+  const fromSheet = await fetchProximasParcelasFromSheet();
+  if (fromSheet.length > 0) {
+    await AsyncStorage.setItem(PROXIMAS_KEY, JSON.stringify(fromSheet));
+  }
+  return fromSheet;
+}
+
+export async function addProximaParcelaAndSync(
+  p: Omit<ProximaParcela, "id">
+): Promise<ProximaParcela> {
+  const raw = await AsyncStorage.getItem(PROXIMAS_KEY);
+  const lista: ProximaParcela[] = raw ? JSON.parse(raw) : [];
+  const nova: ProximaParcela = { ...p, id: Date.now().toString() };
+  lista.unshift(nova);
+  await AsyncStorage.setItem(PROXIMAS_KEY, JSON.stringify(lista));
+  syncProximasParcelasToSheet(lista);
+  return nova;
+}
+
+export async function removeProximaParcelaAndSync(nome: string): Promise<void> {
+  const raw = await AsyncStorage.getItem(PROXIMAS_KEY);
+  const lista: ProximaParcela[] = raw ? JSON.parse(raw) : [];
+  const nova = lista.filter((p) => p.nome !== nome);
+  await AsyncStorage.setItem(PROXIMAS_KEY, JSON.stringify(nova));
+  syncProximasParcelasToSheet(nova);
 }

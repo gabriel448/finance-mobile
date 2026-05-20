@@ -221,6 +221,45 @@ export async function markAllInstallmentsPaid(nomes: string[]): Promise<void> {
   await AsyncStorage.setItem(PAID_INSTALLMENTS_KEY, JSON.stringify(lista));
 }
 
+// ── Controle do modal de virada de mês ────────────────────────────────────
+
+const MONTH_RESET_KEY = "month_reset_seen";
+
+function currentMonthStr(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+}
+
+export async function shouldShowMonthReset(): Promise<boolean> {
+  const stored = await AsyncStorage.getItem(MONTH_RESET_KEY);
+  const month = currentMonthStr();
+  if (!stored) {
+    // Primeira vez — registra o mês atual silenciosamente, não mostra agora
+    await AsyncStorage.setItem(MONTH_RESET_KEY, month);
+    return false;
+  }
+  return stored !== month;
+}
+
+export async function markMonthResetSeen(): Promise<void> {
+  await AsyncStorage.setItem(MONTH_RESET_KEY, currentMonthStr());
+}
+
+// ── Aviso de atualização do Apps Script ───────────────────────────────────
+
+const SCRIPT_UPDATE_KEY = "script_update_notice_v1";
+
+export async function shouldShowScriptUpdateNotice(): Promise<boolean> {
+  const seen = await AsyncStorage.getItem(SCRIPT_UPDATE_KEY);
+  return seen === null;
+}
+
+export async function markScriptUpdateNoticeSeen(): Promise<void> {
+  await AsyncStorage.setItem(SCRIPT_UPDATE_KEY, "seen");
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export async function resetPaidInstallmentsIfNewMonth(): Promise<boolean> {
   const stored = await AsyncStorage.getItem(PAID_MONTH_KEY);
   const now = new Date();

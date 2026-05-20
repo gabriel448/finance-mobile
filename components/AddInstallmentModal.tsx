@@ -12,8 +12,8 @@ import {
   Animated,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { addInstallmentToSheet, getCellConfig } from "../services/sheetsService";
-import { addInstallmentMetadata, addProximaParcela, isProximoMes } from "../services/localStorage";
+import { addInstallmentToSheet, getCellConfig, addProximaParcelaAndSync } from "../services/sheetsService";
+import { addInstallmentMetadata, isProximoMes } from "../services/localStorage";
 import { useAudioPlayer } from "expo-audio";
 
 interface Props {
@@ -93,7 +93,7 @@ export default function AddInstallmentModal({ visible, onClose, onSuccess }: Pro
       const proximoMes = config.diaFechamento ? isProximoMes(config.diaFechamento, hoje) : false;
 
       if (proximoMes) {
-        await addProximaParcela({ nome: nome.trim(), valor: valorNum, restantes: restNum, dataAdicionado: hoje });
+        await addProximaParcelaAndSync({ nome: nome.trim(), valor: valorNum, restantes: restNum, dataAdicionado: hoje });
       } else {
         await addInstallmentToSheet(restNum, nome.trim(), valorNum);
       }

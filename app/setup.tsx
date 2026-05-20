@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from "react";
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
-  ScrollView, ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Modal,
+  ScrollView, ActivityIndicator, KeyboardAvoidingView, Platform, Modal,
 } from "react-native";
 import { useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { saveCellConfig, getCellConfig, getSaldo, getScriptUrl, clearScriptUrl } from "../services/sheetsService";
+import AppAlert, { AppAlertProps } from "../components/AppAlert";
 
 export default function SetupScreen() {
   const router = useRouter();
@@ -19,8 +20,15 @@ export default function SetupScreen() {
   const [salarioManual,    setSalarioManual]    = useState("");
   const [loading,          setLoading]          = useState(false);
   const [scriptUrl,        setScriptUrl]        = useState("");
-  const [infoVisible,      setInfoVisible]      = useState(false);
-  const [infoSimVisible,   setInfoSimVisible]   = useState(false);
+  const [infoVisible,        setInfoVisible]        = useState(false);
+  const [infoSimVisible,     setInfoSimVisible]     = useState(false);
+  const [infoSaldoVisible,   setInfoSaldoVisible]   = useState(false);
+  const [infoGastoVisible,   setInfoGastoVisible]   = useState(false);
+  const [infoGanhosVisible,  setInfoGanhosVisible]  = useState(false);
+  const [infoDiaFechVisible, setInfoDiaFechVisible] = useState(false);
+  const [alertConfig,        setAlertConfig]        = useState<Omit<AppAlertProps, "visible" | "onClose"> | null>(null);
+
+  function showAlert(cfg: Omit<AppAlertProps, "visible" | "onClose">) { setAlertConfig(cfg); }
 
   useEffect(() => {
     getCellConfig().then((c) => {
@@ -41,16 +49,16 @@ export default function SetupScreen() {
     const saldo = cellSaldo.trim().toUpperCase();
     const gasto = cellGasto.trim().toUpperCase();
     if (!saldo || !gasto) {
-      Alert.alert("Preencha os campos", "Informe as referências das duas células.");
+      showAlert({ type: "error", title: "Preencha os campos", message: "Informe as referências das duas células." });
       return;
     }
     if (cellParcelasStart.trim() && !diaFechamento.trim()) {
-      Alert.alert("Campo obrigatório", "Informe o dia de fechamento do cartão para usar a aba de parcelas.");
+      showAlert({ type: "error", title: "Campo obrigatório", message: "Informe o dia de fechamento do cartão para usar a aba de parcelas." });
       return;
     }
     const diaFechNum = diaFechamento.trim() ? parseInt(diaFechamento.trim()) : undefined;
     if (diaFechNum !== undefined && (isNaN(diaFechNum) || diaFechNum < 1 || diaFechNum > 28)) {
-      Alert.alert("Dia inválido", "O dia de fechamento deve ser entre 1 e 28.");
+      showAlert({ type: "error", title: "Dia inválido", message: "O dia de fechamento deve ser entre 1 e 28." });
       return;
     }
     setLoading(true);
@@ -74,34 +82,29 @@ export default function SetupScreen() {
                              : undefined,
       });
 
-      Alert.alert(
-        "Configurado! ✅",
-        `Saldo atual lido: R$ ${valor.toFixed(2).replace(".", ",")}`,
-        [{ text: "Ir para o app", onPress: () => router.replace("/") }]
-      );
+      showAlert({
+        type: "success",
+        title: "Configurado!",
+        message: `Saldo atual lido: R$ ${valor.toFixed(2).replace(".", ",")}`,
+        buttons: [{ text: "Ir para o app", onPress: () => router.replace("/") }],
+      });
     } catch (e: any) {
-      Alert.alert("Erro ao testar célula", e.message ?? "Verifique a referência informada.");
+      showAlert({ type: "error", title: "Erro ao testar célula", message: e.message ?? "Verifique a referência informada." });
     } finally {
       setLoading(false);
     }
   }
 
-  async function handleTrocarPlanilha() {
-    Alert.alert(
-      "Trocar planilha?",
-      "Isso removerá a URL do script configurada. Você precisará configurar novamente.",
-      [
+  function handleTrocarPlanilha() {
+    showAlert({
+      type: "confirm",
+      title: "Trocar planilha?",
+      message: "Isso removerá a URL do script configurada. Você precisará configurar novamente.",
+      buttons: [
+        { text: "Trocar", style: "destructive", onPress: async () => { await clearScriptUrl(); router.replace("/onboarding"); } },
         { text: "Cancelar", style: "cancel" },
-        {
-          text: "Trocar",
-          style: "destructive",
-          onPress: async () => {
-            await clearScriptUrl();
-            router.replace("/onboarding");
-          },
-        },
-      ]
-    );
+      ],
+    });
   }
 
   const urlDisplay = scriptUrl
@@ -131,21 +134,36 @@ export default function SetupScreen() {
 
         {/* ── Card principal ── */}
         <View style={styles.card}>
-          <Text style={styles.label}>Célula do saldo disponível</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4, gap: 6 }}>
+            <Text style={[styles.label, { marginBottom: 0 }]}>Célula do saldo disponível</Text>
+            <TouchableOpacity onPress={() => setInfoSaldoVisible(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="information-circle-outline" size={18} color="#58a6ff" />
+            </TouchableOpacity>
+          </View>
           <Text style={styles.hint}>Calculada pela fórmula da sua planilha (só leitura)</Text>
           <TextInput style={styles.input} value={cellSaldo} onChangeText={setCellSaldo}
             placeholder="ex: F9" placeholderTextColor="#484f58" autoCapitalize="characters" autoCorrect={false} />
 
           <View style={styles.divider} />
 
-          <Text style={styles.label}>Célula de gastos acumulados</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4, gap: 6 }}>
+            <Text style={[styles.label, { marginBottom: 0 }]}>Célula de gastos acumulados</Text>
+            <TouchableOpacity onPress={() => setInfoGastoVisible(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="information-circle-outline" size={18} color="#58a6ff" />
+            </TouchableOpacity>
+          </View>
           <Text style={styles.hint}>O app soma os gastos nesta célula</Text>
           <TextInput style={styles.input} value={cellGasto} onChangeText={setCellGasto}
             placeholder="ex: I8" placeholderTextColor="#484f58" autoCapitalize="characters" autoCorrect={false} />
 
           <View style={styles.divider} />
 
-          <Text style={styles.label}>Célula de ganhos variáveis (Opcional)</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 4, gap: 6 }}>
+            <Text style={[styles.label, { marginBottom: 0 }]}>Célula de ganhos variáveis (Opcional)</Text>
+            <TouchableOpacity onPress={() => setInfoGanhosVisible(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="information-circle-outline" size={18} color="#58a6ff" />
+            </TouchableOpacity>
+          </View>
           <Text style={styles.hint}>O app soma ganhos extras nesta célula; a planilha a inclui no saldo automaticamente</Text>
           <TextInput style={styles.input} value={cellGanhosVariaveis} onChangeText={setCellGanhosVariaveis}
             placeholder="ex: H8" placeholderTextColor="#484f58" autoCapitalize="characters" autoCorrect={false} />
@@ -171,6 +189,9 @@ export default function SetupScreen() {
                 <Text style={styles.requiredBadgeText}>Obrigatório</Text>
               </View>
             )}
+            <TouchableOpacity onPress={() => setInfoDiaFechVisible(true)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Ionicons name="information-circle-outline" size={18} color="#58a6ff" />
+            </TouchableOpacity>
           </View>
           <Text style={styles.hint}>Compras a partir deste dia entram na fatura do próximo mês (1–28)</Text>
           <TextInput
@@ -258,6 +279,120 @@ export default function SetupScreen() {
         <Text style={styles.footer}>
           O app vai ler o saldo de {cellSaldo || "?"} e somar gastos em {cellGasto || "?"}
         </Text>
+
+        {alertConfig && (
+          <AppAlert
+            {...alertConfig}
+            visible
+            onClose={() => setAlertConfig(null)}
+          />
+        )}
+
+        {/* ── Modal info saldo ── */}
+        <Modal visible={infoSaldoVisible} transparent animationType="fade" onRequestClose={() => setInfoSaldoVisible(false)}>
+          <View style={styles.infoOverlay}>
+            <View style={styles.infoCard}>
+              <View style={styles.infoIconCircle}>
+                <Ionicons name="stats-chart" size={32} color="#58a6ff" />
+              </View>
+              <Text style={styles.infoTitle}>Célula do saldo disponível</Text>
+              <Text style={styles.infoText}>
+                Esta célula é calculada automaticamente pela{" "}
+                <Text style={{ color: "#e6edf3", fontWeight: "700" }}>fórmula da sua planilha</Text>.
+                O Hero apenas lê o valor dela para exibir o seu saldo — o app nunca escreve nesta célula.
+              </Text>
+              <View style={styles.infoList}>
+                <Text style={styles.infoListItem}><Text style={{ fontWeight: "bold", color: "#e6edf3" }}>Exemplo de fórmula:</Text> =B2-I8+H8</Text>
+                <Text style={styles.infoListItem}>onde B2 = salário, I8 = gastos, H8 = ganhos variáveis</Text>
+              </View>
+              <Text style={styles.infoText}>
+                O Hero soma os gastos e ganhos nas células corretas; sua fórmula recalcula o saldo automaticamente.
+              </Text>
+              <TouchableOpacity style={styles.btnInfoClose} onPress={() => setInfoSaldoVisible(false)} activeOpacity={0.8}>
+                <Text style={styles.btnInfoCloseText}>Entendi</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ── Modal info gastos ── */}
+        <Modal visible={infoGastoVisible} transparent animationType="fade" onRequestClose={() => setInfoGastoVisible(false)}>
+          <View style={styles.infoOverlay}>
+            <View style={styles.infoCard}>
+              <View style={styles.infoIconCircle}>
+                <Ionicons name="add-circle" size={32} color="#58a6ff" />
+              </View>
+              <Text style={styles.infoTitle}>Célula de gastos acumulados</Text>
+              <Text style={styles.infoText}>
+                Toda vez que você registra um gasto no Hero, o valor é{" "}
+                <Text style={{ color: "#e6edf3", fontWeight: "700" }}>somado nesta célula</Text>.
+              </Text>
+              <View style={styles.infoList}>
+                <Text style={styles.infoListItem}>• Sua fórmula de saldo deve <Text style={{ color: "#e6edf3" }}>subtrair</Text> esta célula</Text>
+                <Text style={styles.infoListItem}><Text style={{ fontWeight: "bold", color: "#e6edf3" }}>Exemplo:</Text> se gastos = I8, use =B2-<Text style={{ color: "#f85149" }}>I8</Text></Text>
+              </View>
+              <Text style={styles.infoText}>
+                Na virada do mês, o Hero zera esta célula ao confirmar o reset mensal.
+              </Text>
+              <TouchableOpacity style={styles.btnInfoClose} onPress={() => setInfoGastoVisible(false)} activeOpacity={0.8}>
+                <Text style={styles.btnInfoCloseText}>Entendi</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ── Modal info ganhos variáveis ── */}
+        <Modal visible={infoGanhosVisible} transparent animationType="fade" onRequestClose={() => setInfoGanhosVisible(false)}>
+          <View style={styles.infoOverlay}>
+            <View style={styles.infoCard}>
+              <View style={[styles.infoIconCircle, { borderColor: "#3fb95040" }]}>
+                <Ionicons name="trending-up" size={32} color="#3fb950" />
+              </View>
+              <Text style={styles.infoTitle}>Ganhos variáveis</Text>
+              <Text style={styles.infoText}>
+                São entradas extras de dinheiro que variam todo mês — como{" "}
+                <Text style={{ color: "#e6edf3", fontWeight: "700" }}>freelances, bônus, reembolsos</Text>, etc.
+              </Text>
+              <View style={styles.infoList}>
+                <Text style={styles.infoListItem}>• O Hero soma cada ganho registrado nesta célula</Text>
+                <Text style={styles.infoListItem}>• Sua fórmula de saldo deve <Text style={{ color: "#e6edf3" }}>somar</Text> esta célula</Text>
+                <Text style={styles.infoListItem}><Text style={{ fontWeight: "bold", color: "#e6edf3" }}>Exemplo:</Text> =B2-I8+<Text style={{ color: "#3fb950" }}>H8</Text></Text>
+              </View>
+              <Text style={styles.infoText}>
+                Na virada do mês, esta célula é zerada junto com a de gastos.
+              </Text>
+              <TouchableOpacity style={styles.btnInfoClose} onPress={() => setInfoGanhosVisible(false)} activeOpacity={0.8}>
+                <Text style={styles.btnInfoCloseText}>Entendi</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
+
+        {/* ── Modal info dia de fechamento ── */}
+        <Modal visible={infoDiaFechVisible} transparent animationType="fade" onRequestClose={() => setInfoDiaFechVisible(false)}>
+          <View style={styles.infoOverlay}>
+            <View style={styles.infoCard}>
+              <View style={[styles.infoIconCircle, { borderColor: "#d4a01740" }]}>
+                <Ionicons name="calendar" size={32} color="#d4a017" />
+              </View>
+              <Text style={styles.infoTitle}>Dia de fechamento do cartão</Text>
+              <Text style={styles.infoText}>
+                É o dia em que a sua fatura é encerrada. Ele define em qual mês uma parcela será debitada:
+              </Text>
+              <View style={styles.infoList}>
+                <Text style={styles.infoListItem}>• Compra <Text style={{ color: "#e6edf3" }}>antes</Text> do fechamento → fatura do mês atual</Text>
+                <Text style={styles.infoListItem}>• Compra <Text style={{ color: "#e6edf3" }}>no dia ou depois</Text> → fatura do próximo mês</Text>
+                <Text style={styles.infoListItem}><Text style={{ fontWeight: "bold", color: "#e6edf3" }}>Exemplo dia 10:</Text> compra no dia 9 → mês atual; dia 10 → próximo mês</Text>
+              </View>
+              <Text style={styles.infoText}>
+                Na virada do mês calendário, parcelas do "próximo mês" são promovidas automaticamente para a planilha.
+              </Text>
+              <TouchableOpacity style={styles.btnInfoClose} onPress={() => setInfoDiaFechVisible(false)} activeOpacity={0.8}>
+                <Text style={styles.btnInfoCloseText}>Entendi</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Modal>
 
         {/* ── Modal info parcelas ── */}
         <Modal visible={infoVisible} transparent animationType="fade" onRequestClose={() => setInfoVisible(false)}>

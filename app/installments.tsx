@@ -13,8 +13,8 @@ import {
   Vibration,
 } from "react-native";
 import { useFocusEffect, useRouter } from "expo-router";
-import { getInstallments, Installment, payInstallment, payAllInstallments, deleteInstallment, getCellConfig, addInstallmentToSheet } from "../services/sheetsService";
-import { getPaidInstallments, togglePaidInstallment, markInstallmentPaid, markAllInstallmentsPaid, resetPaidInstallmentsIfNewMonth, isProximoMes, getProximasParcelas, removeProximaParcelaByNome, addInstallmentMetadata, ProximaParcela } from "../services/localStorage";
+import { getInstallments, Installment, payInstallment, payAllInstallments, deleteInstallment, getCellConfig, addInstallmentToSheet, getProximasParcelasComFallback, removeProximaParcelaAndSync } from "../services/sheetsService";
+import { getPaidInstallments, togglePaidInstallment, markInstallmentPaid, markAllInstallmentsPaid, resetPaidInstallmentsIfNewMonth, addInstallmentMetadata, ProximaParcela } from "../services/localStorage";
 import { Ionicons } from "@expo/vector-icons";
 import InstallmentDetailModal from "../components/InstallmentDetailModal";
 import AddInstallmentModal from "../components/AddInstallmentModal";
@@ -48,14 +48,19 @@ export default function InstallmentsScreen() {
   const opacityAnim = useRef(new Animated.Value(0)).current;
   const playerCheck = useAudioPlayer(require("../assets/check.mp3"));
 
-  async function promoverParcelasSeNecessario(dia: number) {
-    const proximas = await getProximasParcelas();
-    const toPromote = proximas.filter(p => !isProximoMes(dia, p.dataAdicionado));
+  async function promoverParcelasSeNecessario() {
+    const proximas = await getProximasParcelasComFallback();
+    const agora = new Date();
+    const toPromote = proximas.filter((p: ProximaParcela) => {
+      const added = new Date(p.dataAdicionado);
+      return added.getFullYear() < agora.getFullYear() ||
+        (added.getFullYear() === agora.getFullYear() && added.getMonth() < agora.getMonth());
+    });
     for (const p of toPromote) {
       try {
         await addInstallmentToSheet(p.restantes, p.nome, p.valor);
         await addInstallmentMetadata(p.nome, p.dataAdicionado);
-        await removeProximaParcelaByNome(p.nome);
+        await removeProximaParcelaAndSync(p.nome);
       } catch {
         // Falha silenciosa — tenta novamente na próxima abertura
       }
@@ -78,7 +83,7 @@ export default function InstallmentsScreen() {
     setConfigStatus("ok");
     setDiaFechamento(config.diaFechamento);
 
-    await promoverParcelasSeNecessario(config.diaFechamento);
+    await promoverParcelasSeNecessario();
     await resetPaidInstallmentsIfNewMonth();
 
     const [, paid] = await Promise.all([
@@ -99,7 +104,7 @@ export default function InstallmentsScreen() {
     try {
       const [sheet, proximas] = await Promise.all([
         getInstallments(),
-        getProximasParcelas(),
+        getProximasParcelasComFallback(),
       ]);
       setInstallments(sheet);
       setProximasParcelas(proximas);
@@ -355,7 +360,7 @@ export default function InstallmentsScreen() {
         }}
         onDelete={async (inst) => {
           if (selectedIsProximoMes) {
-            await removeProximaParcelaByNome(inst.nome);
+            await removeProximaParcelaAndSync(inst.nome);
           } else {
             await deleteInstallment(inst.rowIndex);
           }

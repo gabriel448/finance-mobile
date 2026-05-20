@@ -7,7 +7,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "postinstall": "node scripts/postinstall.js"
+    "sync-code": "node scripts/sync-code.js",
+    "postinstall": "node scripts/postinstall.js && node scripts/sync-code.js"
   },
   "npmrc": "legacy-peer-deps=true",
   "dependencies": {
