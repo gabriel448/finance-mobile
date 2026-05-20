@@ -715,7 +715,7 @@
       <span>Controle total<br>das suas finanças</span>
     </h1>
     <p class="hero-sub reveal reveal-delay-2">
-      Um app Android que conecta direto na sua planilha. Registre gastos, gerencie parcelas e simule seu saldo futuro — tudo em tempo real.
+      Um app Android que conecta direto na sua planilha. Registre gastos, ganhos variáveis e parcelas — e simule seu saldo futuro em tempo real.
     </p>
     <div class="hero-actions reveal reveal-delay-3">
       <button onclick="openDownloadModal()" class="btn-primary">
@@ -731,15 +731,15 @@
 
     <div class="stats-strip reveal reveal-delay-5">
       <div class="stat-item">
-        <div class="stat-num" data-count="6">0</div>
+        <div class="stat-num" data-count="7">0</div>
         <div class="stat-label">Telas no app</div>
       </div>
       <div class="stat-item">
-        <div class="stat-num" data-count="11">0</div>
+        <div class="stat-num" data-count="19">0</div>
         <div class="stat-label">Ações no script</div>
       </div>
       <div class="stat-item">
-        <div class="stat-num" data-count="7">0</div>
+        <div class="stat-num" data-count="8">0</div>
         <div class="stat-label">Campos configuráveis</div>
       </div>
       <div class="stat-item">
@@ -790,11 +790,18 @@
         <p>O app sabe quando a fatura fecha e envia a parcela para o mês correto automaticamente.</p>
       </div>
       <div class="feature-card reveal reveal-delay-5">
+        <div class="feature-icon-wrap icon-green">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+        </div>
+        <h3>Ganhos variáveis</h3>
+        <p>Registre freelances, bônus e reembolsos. O valor é somado direto na planilha e o saldo atualiza na hora.</p>
+      </div>
+      <div class="feature-card reveal reveal-delay-6">
         <div class="feature-icon-wrap icon-purple">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
         </div>
         <h3>Simular saldo futuro</h3>
-        <p>Saiba quanto terá no próximo mês após descontar custos fixos e todas as parcelas pendentes.</p>
+        <p>Saiba quanto terá no próximo mês após descontar custos fixos, ganhos variáveis e todas as parcelas pendentes.</p>
       </div>
       <div class="feature-card reveal reveal-delay-6">
         <div class="feature-icon-wrap icon-teal">
@@ -911,7 +918,28 @@
           </div>
           <div class="tip">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" color="#58a6ff"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-            <p>Certifique-se de que esta célula começa com <strong>0</strong> no início de cada mês. O app não faz reset automático — isso deve ser controlado pela sua planilha.</p>
+            <p>No início de cada mês, o app exibe um aviso de virada de mês e oferece zerar esta célula automaticamente. Basta confirmar — nenhuma ação manual necessária.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- cellGanhosVariaveis -->
+      <div class="cell-card reveal">
+        <div class="cell-card-head">
+          <span class="cell-tag cell-tag-opt">cellGanhosVariaveis</span>
+          <span class="badge badge-opt">Opcional</span>
+          <h3>Célula de Ganhos Variáveis</h3>
+        </div>
+        <div class="cell-card-body">
+          <p>Célula onde o app <strong>acumula entradas extras do mês</strong> — freelances, bônus, reembolsos ou qualquer renda não fixa. Cada ganho registrado na aba <strong>Ganhos Variáveis</strong> é somado nesta célula.</p>
+          <p>Sua fórmula de saldo deve <strong>somar</strong> esta célula para que o saldo reflita automaticamente.</p>
+          <div class="example-tag">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            Exemplo: H8 &nbsp;→&nbsp; fórmula: =B2 - I8 + H8
+          </div>
+          <div class="tip">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" color="#58a6ff"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+            <p>Na virada do mês, o app zera esta célula junto com a de gastos. O saldo restante do mês anterior pode ser transferido automaticamente como um ganho variável do novo mês.</p>
           </div>
         </div>
       </div>
