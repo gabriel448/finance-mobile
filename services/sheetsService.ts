@@ -300,15 +300,16 @@ export async function addDespesa(despesa: Omit<Despesa, "id">): Promise<Despesa>
   const nova: Despesa    = { ...despesa, id: Date.now().toString() };
   lista.unshift(nova);
   await AsyncStorage.setItem(HIST_KEY, JSON.stringify(lista));
-  await syncHistoricoToSheet(lista);
+  syncHistoricoToSheet(lista);
   return nova;
 }
 
 export async function getDespesas(): Promise<Despesa[]> {
   const raw = await AsyncStorage.getItem(HIST_KEY);
-  if (raw) return JSON.parse(raw);
+  const local: Despesa[] = raw ? JSON.parse(raw) : [];
+  if (local.length > 0) return local;
 
-  // Local vazio (ex: após reinstalação) — restaura do backup na planilha
+  // Local vazio — restaura do backup na planilha
   const fromSheet = await fetchHistoricoFromSheet();
   if (fromSheet.length > 0) {
     await AsyncStorage.setItem(HIST_KEY, JSON.stringify(fromSheet));
@@ -395,7 +396,8 @@ export async function addGanhoVariavel(nome: string, valor: number): Promise<Gan
 
 export async function getGanhosVariaveis(): Promise<GanhoVariavel[]> {
   const raw = await AsyncStorage.getItem(GANHOS_KEY);
-  if (raw) return JSON.parse(raw);
+  const local: GanhoVariavel[] = raw ? JSON.parse(raw) : [];
+  if (local.length > 0) return local;
 
   const fromSheet = await fetchGanhosFromSheet();
   if (fromSheet.length > 0) {
@@ -602,7 +604,8 @@ async function fetchProximasParcelasFromSheet(): Promise<ProximaParcela[]> {
 
 export async function getProximasParcelasComFallback(): Promise<ProximaParcela[]> {
   const raw = await AsyncStorage.getItem(PROXIMAS_KEY);
-  if (raw) return JSON.parse(raw);
+  const local: ProximaParcela[] = raw ? JSON.parse(raw) : [];
+  if (local.length > 0) return local;
 
   const fromSheet = await fetchProximasParcelasFromSheet();
   if (fromSheet.length > 0) {
