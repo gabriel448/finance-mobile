@@ -2,7 +2,7 @@ import React, { useState, useCallback, useMemo, useRef } from "react";
 import {
   View, Text, SectionList, TouchableOpacity, StyleSheet,
   StatusBar, RefreshControl, Modal, TextInput, ActivityIndicator,
-  Animated,
+  Animated, KeyboardAvoidingView, Platform,
 } from "react-native";
 import { useFocusEffect } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -299,6 +299,7 @@ export default function GanhosScreen() {
 
       {/* Modal: adicionar ganho */}
       <Modal visible={addVisible} transparent animationType="slide" onRequestClose={() => { if (!saving && !addSuccess) { setAddVisible(false); resetAddModal(); } }}>
+        <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : "height"} style={{ flex: 1 }}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
 
@@ -361,6 +362,7 @@ export default function GanhosScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* Modal: apagar tudo */}
